@@ -1,0 +1,407 @@
+import os
+import numpy as np
+import pandas as pd
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+from global_parameters import *
+from utils import *
+
+# todo: add documentation to all functions
+
+
+def visualize_rmse_of_altering_flag_values_by_treatment(p_nuc_rmse_by_treatment: dict, p_prop_rmse_by_treatment: dict,
+                                                        flag_name: str, full_path_to_save_fig: str = None,
+                                                        **kwargs):
+    plt.clf()
+
+    fig, axis = plt.subplots(1, 2)
+    treatments_axis = np.arange(0, len(p_nuc_rmse_by_treatment), 1)
+    axis[0].bar(x=treatments_axis, height=list(p_nuc_rmse_by_treatment.values()))
+    axis[0].set_xticks(treatments_axis)
+    axis[0].set_xticklabels(list(p_nuc_rmse_by_treatment.keys()))
+    axis[0].tick_params(axis='x', labelrotation=90, labelsize=kwargs.get('x_tick_label_size', 4))
+    axis[0].set_ylabel(f'RMSE between {flag_name} results')
+    axis[0].set_title('P(Nuc)')
+
+    axis[1].bar(x=treatments_axis, height=list(p_prop_rmse_by_treatment.values()))
+    axis[1].set_xticks(treatments_axis)
+    axis[1].set_xticklabels(list(p_prop_rmse_by_treatment.keys()))
+    axis[1].tick_params(axis='x', labelrotation=90, labelsize=kwargs.get('x_tick_label_size', 4))
+    axis[1].set_ylabel(f'RMSE between {flag_name} results')
+    axis[1].set_title('P(Prop)')
+
+    plt.tight_layout()
+
+    if SHOWFIG:
+        plt.show()
+    elif SAVEFIG:
+        path_for_plot_dir = full_path_to_save_fig if full_path_to_save_fig is not None else \
+            os.sep.join(
+                os.getcwd().split(os.sep)[:-1] + ['Results', 'MeasurementsEndpointReadoutsPlots',
+                                                  'Comparison_between_flags',
+                                                  'Global_P_Nuc_VS_P_Prop'])
+        if not os.path.isdir(path_for_plot_dir):
+            os.makedirs(path_for_plot_dir)
+
+        path_for_plot = os.sep.join([path_for_plot_dir,
+                                     f'global_p_nuc_vs_p_prop_all_exps_flag={flag_name}_rmse_scores.png'])
+
+        plt.savefig(path_for_plot, dpi=200)
+
+    plt.close(fig)
+
+
+def visualize_endpoint_readouts_by_treatment_to_varying_calculation_flags(xy1_readout_tuple: Tuple[np.array, np.array],
+                                                                          treatment_per_readout1: np.array,
+                                                                          xy2_readout_tuple: Tuple[np.array, np.array],
+                                                                          treatment_per_readout2: np.array,
+                                                                          full_path_to_save_fig: str = None,
+                                                                          x_label: str = 'Fraction of Nucleators',
+                                                                          y_label: str = 'Fraction of Propagators',
+                                                                          use_log: bool = False,
+                                                                          **kwargs):
+    plt.clf()
+
+    first_flag_value_color = kwargs.get('first_flag_value_color', (1, 0, 0, .5))
+    second_flag_value_color = kwargs.get('second_flag_value_color', (0, 0, 1, .5))
+    first_flag_type_name_and_value = kwargs.get('first_flag_type_name_and_value', 'Recent death=True')
+    second_flag_type_name_and_value = kwargs.get('second_flag_type_name_and_value', 'Recent death=False')
+
+    flag_name = first_flag_type_name_and_value.split('=')[0]
+
+    if use_log:
+        x1_readout = np.log10(xy1_readout_tuple[0])
+        y1_readout = np.log10(xy1_readout_tuple[1])
+        x2_readout = np.log10(xy2_readout_tuple[0])
+        y2_readout = np.log10(xy2_readout_tuple[1])
+    else:
+        x1_readout = xy1_readout_tuple[0]
+        y1_readout = xy1_readout_tuple[1]
+        x2_readout = xy2_readout_tuple[0]
+        y2_readout = xy2_readout_tuple[1]
+
+    fig, ax = plt.subplots(figsize=(10, 10))
+    marker1_per_point, color_per_point, treatment1_to_marker, treatment1_to_color = \
+        get_marker_per_treatment_list(treatment_per_readout1)
+    marker2_per_point, color_per_point, treatment2_to_marker, treatment2_to_color = \
+        get_marker_per_treatment_list(treatment_per_readout2)
+
+    # plotting the results of the first flag value
+    for point_idx, xy in enumerate(zip(x1_readout, y1_readout)):
+        x, y = xy
+        marker = marker1_per_point[point_idx]
+        # color = color_per_point[point_idx]
+        # marker_size = 10 if 'tnf' in treatment_per_readout1[point_idx].lower() else 5
+        ax.plot(x, y, marker=marker, color=first_flag_value_color,
+                label=treatment_per_readout1[point_idx])  # ,ms=marker_size)
+
+    # plotting the results of the second flag value
+    for point_idx, xy in enumerate(zip(x2_readout, y2_readout)):
+        x, y = xy
+        marker = marker2_per_point[point_idx]
+        # color = color_per_point[point_idx]
+        # marker_size = 10 if 'tnf' in treatment_per_readout1[point_idx].lower() else 5
+        ax.plot(x, y, marker=marker, color=second_flag_value_color,
+                label=treatment_per_readout2[point_idx])  # ,ms=marker_size)
+
+    custom_handles, custom_lables = \
+        get_custom_legend_artists(labels_to_colors={key: 'black' for key in treatment1_to_color.keys()},
+                                  labels_to_markers=treatment1_to_marker)
+
+    lgd = ax.legend(handles=custom_handles, labels=custom_lables, loc='best', bbox_to_anchor=(1.05, 1))
+    handles, labels = ax.get_legend_handles_labels()
+    ax.grid('on')
+    ax.set_xlabel('Log' + x_label if use_log else x_label)
+    ax.set_ylabel('Log' + y_label if use_log else y_label)
+
+    add_to_title = f'{first_flag_value_color} is {first_flag_type_name_and_value}\n{second_flag_value_color} is {second_flag_type_name_and_value}'
+    ax.set_title(f'Log(Fraction) of Nucleators & Propagators\n{add_to_title}' if use_log else f'Fraction of Nucleators & Propagators\n{add_to_title}')
+
+    if not use_log:
+        ax.set_xticks([0.1, .30])
+        ax.set_yticks([0.6, 0.95])
+    else:
+        ax.set_xticks([-1, 0])
+        ax.set_yticks([-.4, 0])
+    plt.tight_layout()
+
+    if SHOWFIG:
+        plt.show()
+    elif SAVEFIG:
+        path_for_plot_dir = full_path_to_save_fig if full_path_to_save_fig is not None else \
+            os.sep.join(
+                os.getcwd().split(os.sep)[:-1] + ['Results', 'MeasurementsEndpointReadoutsPlots',
+                                                  'Comparison_between_flags',
+                                                  'Global_P_Nuc_VS_P_Prop'])
+        if not os.path.isdir(path_for_plot_dir):
+            os.makedirs(path_for_plot_dir)
+
+        if use_log:
+            path_for_plot = os.sep.join([path_for_plot_dir, f'LOG_global_p_nuc_vs_p_prop_all_exps_flag={flag_name}.png'])
+        else:
+            path_for_plot = os.sep.join([path_for_plot_dir, f'global_p_nuc_vs_p_prop_all_exps_flag={flag_name}.png'])
+        plt.savefig(path_for_plot, dpi=200, bbox_extra_artists=[lgd], bbox_inches='tight')
+
+    plt.close(fig)
+
+
+def visualize_endpoint_readouts_by_treatment(x_readout: np.array,
+                                             y_readout: np.array,
+                                             treatment_per_readout: np.array,
+                                             full_path_to_save_fig: str = None,
+                                             x_label: str = 'Fraction of Nucleators',
+                                             y_label: str = 'Fraction of Propagators',
+                                             use_log: bool = False):
+    if use_log:
+        x_readout = np.log10(x_readout)
+        y_readout = np.log10(y_readout)
+
+    fig, ax = plt.subplots()#figsize=(10, 10))
+    marker_per_point, color_per_point, treatment_to_marker, treatment_to_color = \
+        get_marker_per_treatment_list(treatment_per_readout)
+    for point_idx, xy in enumerate(zip(x_readout, y_readout)):
+        x, y = xy
+        marker = marker_per_point[point_idx]
+        color = color_per_point[point_idx]
+        marker_size = 10 if 'tnf' in treatment_per_readout[point_idx].lower() else 5
+        ax.plot(x, y, ms=marker_size, marker=marker, color=color, label=treatment_per_readout[point_idx])
+    custom_handles, custom_lables = get_custom_legend_artists(labels_to_colors=treatment_to_color,
+                                                              labels_to_markers=treatment_to_marker)
+    # lgd = ax.legend(handles=custom_handles, labels=custom_lables, loc='best', bbox_to_anchor=(1.05, 1))
+    # handles, labels = ax.get_legend_handles_labels()
+    ax.grid('on')
+    ax.set_xlabel('Log' + x_label if use_log else x_label)
+    ax.set_ylabel('Log' + y_label if use_log else y_label)
+    ax.set_title('Log(Fraction) of Nucleators & Propagators' if use_log else 'Fraction of Nucleators & Propagators')
+
+    if not use_log:
+        ax.set_xticks([0.1, .30])
+        ax.set_yticks([0.6, 0.95])
+    else:
+        ax.set_xticks([-1, 0])
+        ax.set_yticks([-.4, 0])
+    plt.tight_layout()
+    if SHOWFIG:
+        plt.show()
+    elif SAVEFIG:
+        if RECENT_DEATH_ONLY_FLAG:
+            path_for_plot_dir = full_path_to_save_fig if full_path_to_save_fig is not None else \
+                os.sep.join(
+                    os.getcwd().split(os.sep)[:-1] + ['Results', 'MeasurementsEndpointReadoutsPlots',
+                                                      'Only recent death considered for neighbors results',
+                                                      'Global_P_Nuc_VS_P_Prop'])
+        else:
+            path_for_plot_dir = full_path_to_save_fig if full_path_to_save_fig is not None else os.sep.join(
+                os.getcwd().split(os.sep)[:-1] + ['Results', 'MeasurementsEndpointReadoutsPlots',
+                                                  'Global_P_Nuc_VS_P_Prop'])
+        if not os.path.isdir(path_for_plot_dir):
+            os.makedirs(path_for_plot_dir)
+
+        if use_log:
+            path_for_plot = os.sep.join([path_for_plot_dir, f'LOG_global_p_nuc_vs_p_prop_all_exps.png'])
+        else:
+            path_for_plot = os.sep.join([path_for_plot_dir, f'global_p_nuc_vs_p_prop_all_exps.png'])
+        plt.savefig(path_for_plot, dpi=200)  # , bbox_extra_artists=[lgd], bbox_inches='tight')
+
+    plt.close(fig)
+
+
+def visualize_cell_death_in_time(xyt_df: pd.DataFrame = None,
+                                 xyt_full_path: str = None,
+                                 nucleators_mask: np.array = None,
+                                 propagators_maks: np.array = None,
+                                 full_path_to_save_fig: str = None,
+                                 exp_treatment: str = None, exp_name: str = None) -> None:
+    """
+
+    :param xyt_df:
+    :param xyt_full_path:
+    :param nucleators_mask:
+    :param full_path_to_save_fig:
+    :param exp_treatment:
+    :param exp_name:
+    :return:
+    """
+    plt.clf()
+
+    if xyt_df is None and xyt_full_path is None:
+        raise ValueError('either df or path must be not None!')
+
+    if exp_treatment is None or exp_name is None:
+        raise ValueError('must provide exp treatment and name!')
+
+    # clean exp_name and treatment from bad characters
+    exp_name, exp_treatment = exp_name.replace('/', ''), exp_treatment.replace('/', '')
+
+    data = xyt_df if xyt_df is not None else pd.read_csv(xyt_full_path)
+    death_times = data['death_time'].values
+    x, y = data['cell_x'].values, data['cell_y'].values
+
+    min_time_of_death, max_time_of_death = death_times.min(), death_times.max()
+    fig, ax = plt.subplots()
+
+    cmap = mpl.cm.__builtin_cmaps[13]
+    ax.scatter(x, y, c=death_times, cmap=cmap)
+
+    # mark nucleators
+    if nucleators_mask is not None:
+        nucleators_indices = np.where(nucleators_mask)[0]
+        ax.scatter(x[(nucleators_indices)], y[(nucleators_indices)], marker='x', color=(1, 0, 0, .5))
+    # mark propagators
+    if propagators_maks is not None:
+        propagators_indices = np.where(propagators_maks)[0]
+        ax.scatter(x[(propagators_indices)], y[(propagators_indices)], marker='+', color=(1, 1, 0, .5))
+
+    ax.set_xticks([])
+    ax.set_yticks([])
+    # colorbar
+    norm = mpl.colors.Normalize(vmin=min_time_of_death, vmax=max_time_of_death)
+    plt.colorbar(cm.ScalarMappable(norm=norm, cmap=cmap), ax=ax, label='time of death')
+
+    plt.tight_layout()
+
+    if SHOWFIG:
+        plt.show()
+    elif SAVEFIG:
+        if RECENT_DEATH_ONLY_FLAG:
+            path_for_plot_dir = full_path_to_save_fig if full_path_to_save_fig is not None else \
+                os.sep.join(
+                    os.getcwd().split(os.sep)[:-1] + ['Results', 'CellDeathVisualizations',
+                                                      'Only recent death considered for neighbors results',
+                                                      f'{exp_treatment}'])
+        else:
+            path_for_plot_dir = full_path_to_save_fig if full_path_to_save_fig is not None else os.sep.join(
+                os.getcwd().split(os.sep)[:-1] + ['Results', 'CellDeathVisualizations', f'{exp_treatment}'])
+        if not os.path.isdir(path_for_plot_dir):
+            os.makedirs(path_for_plot_dir)
+
+        path_for_plot = os.sep.join([path_for_plot_dir, f'{exp_name}.png'])
+        plt.savefig(path_for_plot, dpi=200)
+
+    plt.close(fig)
+
+
+def plot_measurements_by_time(p_nuc_by_time: np.array,
+                              p_prop_by_time: np.array,
+                              accumulated_fraction_of_death_by_time: np.array,
+                              temporal_resolution: int,
+                              exp_name: str, exp_treatment: str,
+                              full_path_to_save_fig: str = None) -> None:
+    """
+
+    :param p_nuc_by_time:
+    :param p_prop_by_time:
+    :param accumulated_fraction_of_death_by_time:
+    :param temporal_resolution:
+    :param exp_name:
+    :param exp_treatment:
+    :param full_path_to_save_fig:
+    :return:
+    """
+    plt.clf()
+
+    # clean exp_name and treatment from bad characters
+    exp_name, exp_treatment = exp_name.replace('/', ''), exp_treatment.replace('/', '')
+
+    max_time = len(p_nuc_by_time) * temporal_resolution
+    time_axis = np.arange(0, max_time, temporal_resolution)
+
+    fig, ax = plt.subplots()
+
+    ax.set_title(f'Treatment: {exp_treatment}\nexp:{exp_name}')
+
+    ax1_clr = 'tab:blue'
+    ax.plot(time_axis, p_nuc_by_time, label='Nucleation')
+    ax.set_ylabel('P(Nuc)', color=ax1_clr)
+
+    ax.tick_params(axis='y', labelcolor=ax1_clr)
+    ax.set_ylim(0, 1)
+    ax.set_xticks([time_axis[0], time_axis[len(time_axis) // 2], time_axis[-1]])
+    # ax.set_xticklabels(['{}-{}'.format(x, x + 100) for x in time_ticks])
+    ax2_color = 'tab:red'
+    ax2 = ax.twinx()
+    ax2.plot(time_axis, p_prop_by_time, label='Propagation', color=ax2_color)
+    ax2.set_ylabel('P(Prop)', color=ax2_color)
+    ax2.tick_params(axis='y', labelcolor=ax2_color)
+    ax2.set_ylim(0, 1)
+    # plotting accumulated death
+    ax.set_xlabel('Time Window (Minutes)')
+    ax.plot(time_axis, accumulated_fraction_of_death_by_time, label='Accumulated Death', color='black', marker='p')
+
+    plt.tight_layout()
+
+    if SHOWFIG:
+        plt.show()
+    elif SAVEFIG:
+        if RECENT_DEATH_ONLY_FLAG:
+            path_for_plot_dir = full_path_to_save_fig if full_path_to_save_fig is not None else \
+                os.sep.join(
+                    os.getcwd().split(os.sep)[:-1] + ['Results', 'TemporalMeasurementsPlots',
+                                                      'Only recent death considered for neighbors results',
+                                                      f'{exp_treatment}'])
+        else:
+            path_for_plot_dir = full_path_to_save_fig if full_path_to_save_fig is not None else \
+                os.sep.join(
+                    os.getcwd().split(os.sep)[:-1] + ['Results', 'TemporalMeasurementsPlots', f'{exp_treatment}'])
+        if not os.path.isdir(path_for_plot_dir):
+            os.makedirs(path_for_plot_dir)
+
+        path_for_plot = os.sep.join([path_for_plot_dir, f'{exp_name}.png'])
+        plt.savefig(path_for_plot, dpi=200)
+
+    plt.close(fig)
+
+
+def scatter_with_linear_regression_line(x: np.array, y: np.array, x_label: str, y_label: str, title: str,
+                                        path_to_save_fig: str):
+    """
+
+    :param x:
+    :param y:
+    :param x_label:
+    :param y_label:
+    :param title:
+    :param path_to_save_fig:
+    :return:
+    """
+    plt.clf()
+
+    fig, ax = plt.subplots()
+    # plot probabilities for each level of neighborhoods
+    ax.scatter(x, y, color=(0, 1, 0, 0.8), marker='*')
+    # plot linear regression line
+    regression_line_x, regression_line_y = get_linear_regression_line_between_two_signals(x, y)
+    ax.plot(regression_line_x, regression_line_y)
+
+    # plot decoration
+    ax.set_xlabel(x_label)
+    ax.set_ylabel(y_label)
+    ax.set_title(title)
+    plt.tight_layout()
+
+    if SAVEFIG:
+        plt.savefig(f'{path_to_save_fig}.png', dpi=200)
+        plt.savefig(f'{path_to_save_fig}.eps', dpi=200)
+    elif SHOWFIG:
+        plt.show()
+    plt.close(fig=fig)
+
+
+if __name__ == '__main__':
+    # visualize_cell_death_in_time(xyt_path='Data/Experiments_XYT_CSV/20180620_HAP1_erastin_xy6.csv',
+    #                              to_save_path=os.sep.join(['Results/CellDeathVisualizations', '20180620_HAP1_erastin_xy6_cell_death.png']))
+    #
+    # visualize_cell_death_in_time(xyt_path='Data/Experiments_XYT_CSV/20181227_MCF10A_SKT_xy1.csv',
+    #                              to_save_path=os.sep.join(
+    #                                  ['Results/CellDeathVisualizations', '20181227_MCF10A_SKT_xy1_cell_death.png']))
+    for path in get_all_paths_csv_files_in_dir('Data/Simulations_XYT_CSV/erstin/0.0005'):
+        visualize_cell_death_in_time(xyt_full_path=path,
+                                     full_path_to_save_fig=os.sep.join(
+                                         ['Results/CellDeathVisualizations',
+                                          path.split(os.sep)[-1].replace('.csv', '_erastin_cell_death.png')]))
+    for path in get_all_paths_csv_files_in_dir('Data/Simulations_XYT_CSV/SKT/0.005'):
+        visualize_cell_death_in_time(xyt_full_path=path,
+                                     full_path_to_save_fig=os.sep.join(
+                                         ['Results/CellDeathVisualizations',
+                                          path.split(os.sep)[-1].replace('.csv', '_skt_cell_death.png')]))
