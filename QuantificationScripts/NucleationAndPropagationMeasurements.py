@@ -643,9 +643,10 @@ if __name__ == '__main__':
     #                                       'CompressedTime_XYT_CSV'])))
     #
     #
-    # calc_and_visualize_all_experiments_csvs_in_dir(dir_path=os.sep.join(
-    #     os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV',
-    #                                       'OriginalTimeMinutesData']))
+    calc_and_visualize_all_experiments_csvs_in_dir(limit_exp_num=3, #float('inf'),
+                                                   dir_path=os.sep.join(
+        os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV',
+                                          'OriginalTimeMinutesData']))
 
     # # single experiment testing
     # path = '..\\Data\\Experiments_XYT_CSV\\CompressedTime_XYT_CSV\\20160909_b16f10_aMSH_xy37.csv'

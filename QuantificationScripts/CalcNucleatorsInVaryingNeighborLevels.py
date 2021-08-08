@@ -65,20 +65,44 @@ def calc_pnuc_at_varying_distances_of_neighbors(exp_filename,
     # n_instances = len(full_x)
     die_times = exp_xyt["death_time"].values
     XY = np.column_stack((full_x, full_y))
-    exp_temporal_resolution = exp_details_df[exp_details_df['File Name'] == exp_filename]['Time Interval (min)'].values[0]
+    exp_temporal_resolution = exp_details_df[exp_details_df['File Name'] == exp_filename]['Time Interval (min)'].values[
+        0]
     exp_treatment_type = exp_details_df[exp_details_df['File Name'] == exp_filename]['Treatment'].values[0]
     jump_interval = exp_temporal_resolution
     # time_window_size = WINDOW_SIZE * jump_interval
 
     # get neighbors list of all cells (topological by Voronoi)
-    neighbors_list, neighbors_list2, neighbors_list3 = get_cells_neighbors(XY=XY, threshold_dist=DIST_THRESHOLD_IN_PIXELS)
+    neighbors_list, neighbors_list2, neighbors_list3 = get_cells_neighbors(XY=XY,
+                                                                           threshold_dist=DIST_THRESHOLD_IN_PIXELS)
 
-    nuc_probas_calculator_lvl_2 = np.asarray(calc_probability_to_die_as_a_neighbor_at_given_level(cells_times_of_deaths=die_times,
-                                                                                       cells_neighbors_lists=neighbors_list2))
-    nuc_probas_calculator_lvl_3 = np.asarray(calc_probability_to_die_as_a_neighbor_at_given_level(cells_times_of_deaths=die_times,
-                                                                                       cells_neighbors_lists=neighbors_list3))
+    nuc_probas_calculator_lvl_1 = np.asarray(
+        calc_probability_to_die_as_a_neighbor_at_given_level(cells_times_of_deaths=die_times,
+                                                             cells_neighbors_lists=neighbors_list))
+
+    nuc_probas_calculator_lvl_2 = np.asarray(
+        calc_probability_to_die_as_a_neighbor_at_given_level(cells_times_of_deaths=die_times,
+                                                             cells_neighbors_lists=neighbors_list2))
+    nuc_probas_calculator_lvl_3 = np.asarray(
+        calc_probability_to_die_as_a_neighbor_at_given_level(cells_times_of_deaths=die_times,
+                                                             cells_neighbors_lists=neighbors_list3))
+    org_path = path_to_save_fig_no_type
+    path_to_save_fig_no_type = org_path + '_2on3'
     scatter_with_linear_regression_line(nuc_probas_calculator_lvl_2, nuc_probas_calculator_lvl_3,
                                         x_label='Nucleation probability at level 2 neighborhood',
+                                        y_label='Nucleation probability at level 3 neighborhood',
+                                        title=f'experiment treatment: {exp_treatment_type}',
+                                        path_to_save_fig=path_to_save_fig_no_type)
+
+    path_to_save_fig_no_type = org_path + '_1on2'
+    scatter_with_linear_regression_line(nuc_probas_calculator_lvl_1, nuc_probas_calculator_lvl_2,
+                                        x_label='Nucleation probability at level 1 neighborhood',
+                                        y_label='Nucleation probability at level 2 neighborhood',
+                                        title=f'experiment treatment: {exp_treatment_type}',
+                                        path_to_save_fig=path_to_save_fig_no_type)
+
+    path_to_save_fig_no_type = org_path + '_1on3'
+    scatter_with_linear_regression_line(nuc_probas_calculator_lvl_1, nuc_probas_calculator_lvl_3,
+                                        x_label='Nucleation probability at level 1 neighborhood',
                                         y_label='Nucleation probability at level 3 neighborhood',
                                         title=f'experiment treatment: {exp_treatment_type}',
                                         path_to_save_fig=path_to_save_fig_no_type)
@@ -88,7 +112,8 @@ if __name__ == '__main__':
     exp_main_dir_path = '../Data/Experiments_XYT_CSV/OriginalTimeMinutesData'
     exp_meta_data_full_path = '../Data/Experiments_XYT_CSV/ExperimentsMetaData.csv'
     for filename in filter(lambda x: x.endswith('.csv'), os.listdir(exp_main_dir_path)):
-        path_to_save_fig = os.sep.join(['../Results', 'NucleationProbabilitiesForVaryingLevelsOfNeighborhoods', filename.replace('.csv', '')])
+        path_to_save_fig = os.sep.join(
+            ['../Results', 'NucleationProbabilitiesForVaryingLevelsOfNeighborhoods', filename.replace('.csv', '')])
         calc_pnuc_at_varying_distances_of_neighbors(exp_filename=filename,
                                                     exp_main_directory_path=exp_main_dir_path,
                                                     file_details_full_path=exp_meta_data_full_path,

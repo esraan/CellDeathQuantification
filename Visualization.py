@@ -329,6 +329,13 @@ def plot_measurements_by_time(p_nuc_by_time: np.array,
     ax.set_xlabel('Time Window (Minutes)')
     ax.plot(time_axis, accumulated_fraction_of_death_by_time, label='Accumulated Death', color='black', marker='p')
 
+    # plot lines to visualize 10%-90% cells deaths
+    tenth_percentile = np.where(accumulated_fraction_of_death_by_time >= .1)[0][0]
+    plt.axvline(x=time_axis[tenth_percentile], c='black', linestyle='--', linewidth=0.7)
+
+    nineteenth_percentile = np.where(accumulated_fraction_of_death_by_time >= .9)[0][0]
+    plt.axvline(x=time_axis[nineteenth_percentile], c='black', linestyle='--', linewidth=0.7)
+
     plt.tight_layout()
 
     if SHOWFIG:
@@ -354,9 +361,10 @@ def plot_measurements_by_time(p_nuc_by_time: np.array,
 
 
 def scatter_with_linear_regression_line(x: np.array, y: np.array, x_label: str, y_label: str, title: str,
-                                        path_to_save_fig: str):
+                                        path_to_save_fig: str, plot_linear_regression: bool = False):
     """
 
+    :param plot_linear_regression:
     :param x:
     :param y:
     :param x_label:
@@ -370,14 +378,21 @@ def scatter_with_linear_regression_line(x: np.array, y: np.array, x_label: str, 
     fig, ax = plt.subplots()
     # plot probabilities for each level of neighborhoods
     ax.scatter(x, y, color=(0, 1, 0, 0.8), marker='*')
-    # plot linear regression line
-    regression_line_x, regression_line_y = get_linear_regression_line_between_two_signals(x, y)
-    ax.plot(regression_line_x, regression_line_y)
-
+    if plot_linear_regression:
+        # plot linear regression line
+        regression_line_x, regression_line_y = get_linear_regression_line_between_two_signals(x, y)
+        ax.plot(regression_line_x, regression_line_y)
+    else:
+        regression_line = np.linspace(0, 1, num=len(x), endpoint=True)
+        ax.plot(regression_line, regression_line)
     # plot decoration
     ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
     ax.set_title(title)
+
+    ax.set_ylim((0, 1))
+    ax.set_xlim((0, 1))
+
     plt.tight_layout()
 
     if SAVEFIG:
