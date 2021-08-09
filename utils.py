@@ -4,6 +4,8 @@ import numpy as np
 import pandas as pd
 from scipy.spatial import Voronoi
 from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_squared_error as mse
+from sklearn.metrics.pairwise import euclidean_distances as euc_dis
 from global_parameters import *
 from matplotlib.lines import Line2D
 import random
@@ -103,6 +105,7 @@ def write_dict_as_json(path: str, dict_to_write: dict):
             json.dump(dict_to_write, f)
     except OSError as e:
         print(f'problem saving the configuration file at:\n{e}')
+
 
 def get_marker_per_treatment_list(all_treatments: np.array) -> Tuple[List, List, dict, dict]:
     """
@@ -376,3 +379,25 @@ def get_cells_not_neighboring_dead_cells(dead_cells_mask, neighbors, neighbors_l
 
     # not_around_dead_cells_2 = np.array(not_around_dead_cells_1-1, dtype=bool) * all_alive_cells
     return not_around_dead_cells_1, not_around_dead_cells_2
+
+
+def calc_distance_metric_between_signals(y_true: np.array, y_pred: np.array, metric: str = 'rmse'):
+    """
+    calculates a distance metric between two np.array values, enforces equal lengths of arrays.
+    supports lists, tuples and any iterables as well.
+    9/08/2021 - supports the following metrics: rmse, mse, kl-divergence, euclidean distance (returns distances mean).
+    :param y_true: np.array
+    :param y_pred: np.array
+    :param metric: str, metric to calculate
+    :return: float, the metric calculation result.
+    """
+    assert len(y_true) == len(y_pred), f'y_true and y_pred must have equal lengths but y_true length = {len(y_true)}' \
+                                       f' and y_pred length = {len(y_pred)}'
+    if metric == 'rmse':
+        return mse(y_true=y_true, y_pred=y_pred, squared=False)
+    if metric == 'mse':
+        return mse(y_true=y_true, y_pred=y_pred, squared=True)
+    if metric == 'kl_div':
+        return kl_divergence(y_true, y_pred)
+    if metric == 'euclidean':
+        return euc_dis(y_true, y_pred).mean()
