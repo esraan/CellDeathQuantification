@@ -8,7 +8,6 @@ from enum import IntEnum, unique
 from utils import *
 from global_parameters import *
 from Visualization import *
-from sklearn.metrics import mean_squared_error as mse
 
 
 @unique
@@ -146,7 +145,6 @@ def get_nucleation_candidates_pnuc_and_number_of_nucleators_in_timeframe(cells_t
     nucleation candidates indices, nucleation candidates mask,
     nucleators indices, nucleators mask,
     and p(nuc). also returns the propagators detected in blobs - propagators_to_add_indices and propagators_to_add_mask
-
     :param cells_times_of_death:
     :param cells_neighbors:
     :param timeframe_to_analyze:
@@ -403,17 +401,26 @@ def calc_single_experiment_temporal_p_nuc_and_p_prop_and_endpoint_readouts(singl
            all_frames_nucleators_mask, all_frames_propagators_mask, accumulated_death_fraction_by_time
 
 
-def calc_and_visualize_all_experiments_csvs_in_dir(dir_path: str = None, limit_exp_num: int = float('inf'), **kwargs) -> \
+def calc_and_visualize_all_experiments_csvs_in_dir(dir_path: str = None,
+                                                   limit_exp_num: int = float('inf'), **kwargs) -> \
         Tuple[
             np.array, np.array, np.array]:
     """
-
-    :param dir_path:
-    :param limit_exp_num:
+    calculates temporal and endpoint readouts probabilities for all csv files in a directory.
+    all csv files in the directory must contain XYT coordinates with column names ['cell_x', 'cell_y', 'death_time'].
+    the function supports the following flags (within the kwargs argument) for different calculations:
+    1. only_recent_death_flag_for_neighbors_calc - considers neighbors of dead cells as propagation candidates only
+        if the death occured in time T and timeframe-temporalResolution<T<=timeframe .
+    2. visualize - whether to visualize (plot) the readouts (both temporal and endpoint).
+    3. use_log - when visualizing endpoint readouts, whether to use the log of values calculated or the
+        values themselves.
+    :param dir_path: str, the directory path which contains all csv files.
+    :param limit_exp_num: int, maximum number of experiments to analyze, default is infinity (to analyze all
+        experiments in the directory.
     :param kwargs:
-    :return:
+    :return: endpoint readouts:
+        all_global_p_nuc - np.array, all_global_p_prop - np.array, all_treatment_types - np.array
     """
-    # todo: add documentation
     only_recent_death_flag_for_neighbors_calc = kwargs.get('only_recent_death_flag_for_neighbors_calc',
                                                            RECENT_DEATH_ONLY_FLAG)
 
@@ -488,18 +495,21 @@ def calc_and_visualize_all_experiments_csvs_in_dir(dir_path: str = None, limit_e
 def calc_all_experiments_csvs_in_dir_with_altering_flag_values(dir_path: str = None,
                                                                limit_exp_num: int = float('inf'),
                                                                flag_key: str = 'only_recent_death_flag_for_neighbors_calc',
-                                                               flag_values: Tuple = (True, False),
-                                                               **kwargs) -> Tuple[List[Tuple], List]:
+                                                               flag_values: Tuple = (True, False)) \
+        -> Tuple[List[Tuple], List]:
     """
-
-    :param dir_path:
-    :param limit_exp_num:
-    :param flag_key:
-    :param flag_values:
-    :param kwargs:
-    :return:
+    calculates temporal and endpoint readouts probabilities for all csv files in a directory under various flag values.
+    all csv files in the directory must contain XYT coordinates with column names ['cell_x', 'cell_y', 'death_time'].
+    the flags supported are the same as in calc_and_visualize_all_experiments_csvs_in_dir function.
+    the flag key argument is the name of the flag and the values are a tuple of the flag values to analyze the files by.
+    :param dir_path: str, the directory path which contains all csv files.
+    :param limit_exp_num: int, maximum number of experiments to analyze, default is infinity (to analyze all
+        experiments in the directory.
+    :param flag_key: str, the flag name to alternate its value and analyze by.
+    :param flag_values: Tuple, values of flags to analyze by.
+    :return: endpoint readouts for all experiments in the directory, 1st element is the readouts for the 1st
+        flag value given, 2nd element is for the 2nd flag value given and so on (if exists).
     """
-    # todo: add documentation
     all_global_p_nuc_p_prop_tuples_list = list()
     all_treatment_types_list = list()
 
@@ -525,21 +535,26 @@ def calc_all_experiments_csvs_in_dir_with_altering_flag_values(dir_path: str = N
     return all_global_p_nuc_p_prop_tuples_list, all_treatment_types_list
 
 
-def calc_rmse_between_experiments_results_of_altering_flag_values(dir_path: str = None,
-                                                                  limit_exp_num: int = float('inf'),
-                                                                  flag_key: str = 'only_recent_death_flag_for_neighbors_calc',
-                                                                  flag_values: Tuple = (True, False),
-                                                                  **kwargs):
+def calc_distance_metric_between_experiments_results_of_altering_flag_values(dir_path: str = None,
+                                                                             limit_exp_num: int = float('inf'),
+                                                                             flag_key: str = 'only_recent_death_flag_for_neighbors_calc',
+                                                                             flag_values: Tuple = (True, False),
+                                                                             **kwargs):
     """
-
-    :param dir_path:
-    :param limit_exp_num:
-    :param flag_key:
-    :param flag_values:
+    aggregates endpoint readouts calculated by calc_all_experiments_csvs_in_dir_with_altering_flag_values function.
+    compares the results of each analysis according the the flag value and calculates a distance metric between
+    the results (default is rmse), the distance metric is given in the kwargs under 'distance_metric' key.
+    the flags arguments are identical to calc_all_experiments_csvs_in_dir_with_altering_flag_values function's arguments.
+    9/08/2021 - supports the metrics appearing in utils.py/calc_distance_metric_between_signals function.
+    if visualize_flag in kwargs is set to true (which is the default value) also plots the distance metric results.
+    :param dir_path: str, the directory path which contains all csv files.
+    :param limit_exp_num: int, maximum number of experiments to analyze, default is infinity (to analyze all
+        experiments in the directory.
+    :param flag_key: str, the flag name to alternate its value and analyze by.
+    :param flag_values: Tuple, values of flags to analyze by.
     :param kwargs:
-    :return:
+    :return: by_treatment_distance_metric_score_p_nuc - np.array, by_treatment_distance_metric_score_p_prop - np.array
     """
-    # todo: add documentation
     all_global_p_nuc_p_prop_tuples_list, \
     all_treatment_types_list = calc_all_experiments_csvs_in_dir_with_altering_flag_values(
         dir_path=dir_path,
@@ -553,8 +568,8 @@ def calc_rmse_between_experiments_results_of_altering_flag_values(dir_path: str 
     by_treatment_scores_first_flag_value_p_prop = dict()
     by_treatment_scores_second_flag_value_p_prop = dict()
 
-    by_treatment_rmse_score_p_nuc = dict()
-    by_treatment_rmse_score_p_prop = dict()
+    by_treatment_distance_metric_score_p_nuc = dict()
+    by_treatment_distance_metric_score_p_prop = dict()
 
     for single_exp_idx, treatment_name in enumerate(all_treatment_types_list[0]):
         # by_treatment_rmse_score[treatment_name] = by_treatment_rmse_score.get(treatment_name) + \
@@ -574,18 +589,21 @@ def calc_rmse_between_experiments_results_of_altering_flag_values(dir_path: str 
             [all_global_p_nuc_p_prop_tuples_list[1][1][single_exp_idx]]
 
     for treatment_name in by_treatment_scores_first_flag_value_p_nuc.keys():
-        by_treatment_rmse_score_p_nuc[treatment_name] = \
-            mse(y_true=by_treatment_scores_first_flag_value_p_nuc[treatment_name],
-                y_pred=by_treatment_scores_second_flag_value_p_nuc[treatment_name], squared=False)
-        by_treatment_rmse_score_p_prop[treatment_name] = \
-            mse(y_true=by_treatment_scores_first_flag_value_p_prop[treatment_name],
-                y_pred=by_treatment_scores_second_flag_value_p_prop[treatment_name], squared=False)
+        metric_to_use = kwargs.get('distance_metric', 'rmse')
+        by_treatment_distance_metric_score_p_nuc[treatment_name] = \
+            calc_distance_metric_between_signals(y_true=by_treatment_scores_first_flag_value_p_nuc[treatment_name],
+                                                 y_pred=by_treatment_scores_second_flag_value_p_nuc[treatment_name],
+                                                 metric=metric_to_use)
+        by_treatment_distance_metric_score_p_prop[treatment_name] = \
+            calc_distance_metric_between_signals(y_true=by_treatment_scores_first_flag_value_p_prop[treatment_name],
+                                                 y_pred=by_treatment_scores_second_flag_value_p_prop[treatment_name],
+                                                 metric=metric_to_use)
     if kwargs.get('visualize_flag', True):
-        visualize_rmse_of_altering_flag_values_by_treatment(p_nuc_rmse_by_treatment=by_treatment_rmse_score_p_nuc,
-                                                            p_prop_rmse_by_treatment=by_treatment_rmse_score_p_prop,
+        visualize_rmse_of_altering_flag_values_by_treatment(p_nuc_rmse_by_treatment=by_treatment_distance_metric_score_p_nuc,
+                                                            p_prop_rmse_by_treatment=by_treatment_distance_metric_score_p_prop,
                                                             flag_name=flag_key[:18])
 
-    return by_treatment_rmse_score_p_nuc, by_treatment_rmse_score_p_prop
+    return by_treatment_distance_metric_score_p_nuc, by_treatment_distance_metric_score_p_prop
 
 
 def calc_and_visualize_all_experiments_csvs_in_dir_with_altering_flag_values(dir_path: str = None,
@@ -594,15 +612,19 @@ def calc_and_visualize_all_experiments_csvs_in_dir_with_altering_flag_values(dir
                                                                              flag_values: Tuple = (True, False),
                                                                              **kwargs):
     """
-
-    :param dir_path:
-    :param limit_exp_num:
-    :param flag_key:
-    :param flag_values:
+    calculates (using calc_all_experiments_csvs_in_dir_with_altering_flag_values function) & visualizes
+    temporal and endpoint readouts probabilities for all csv files in a directory under various flag values.
+    all csv files in the directory must contain XYT coordinates with column names ['cell_x', 'cell_y', 'death_time'].
+    the flags supported are the same as in calc_and_visualize_all_experiments_csvs_in_dir function.
+    the flag key argument is the name of the flag and the values are a tuple of the flag values to analyze the files by.
+    :param dir_path: str, the directory path which contains all csv files.
+    :param limit_exp_num: int, maximum number of experiments to analyze, default is infinity (to analyze all
+        experiments in the directory.
+    :param flag_key: str, the flag name to alternate its value and analyze by.
+    :param flag_values: Tuple, values of flags to analyze by.
     :param kwargs:
     :return:
     """
-    # todo: add documentation
     all_global_p_nuc_p_prop_tuples_list, \
     all_treatment_types_list = calc_all_experiments_csvs_in_dir_with_altering_flag_values(dir_path=dir_path,
                                                                                           limit_exp_num=limit_exp_num,
@@ -643,10 +665,10 @@ if __name__ == '__main__':
     #                                       'CompressedTime_XYT_CSV'])))
     #
     #
-    calc_and_visualize_all_experiments_csvs_in_dir(limit_exp_num=3, #float('inf'),
+    calc_and_visualize_all_experiments_csvs_in_dir(limit_exp_num=3,  # float('inf'),
                                                    dir_path=os.sep.join(
-        os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV',
-                                          'OriginalTimeMinutesData']))
+                                                       os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV',
+                                                                                         'OriginalTimeMinutesData']))
 
     # # single experiment testing
     # path = '..\\Data\\Experiments_XYT_CSV\\CompressedTime_XYT_CSV\\20160909_b16f10_aMSH_xy37.csv'
