@@ -638,7 +638,7 @@ class MeasurementsTestCase(unittest.TestCase):
         path_to_testing_csv = 'for_testing_csv_file.csv'
         p_nuc_by_time, p_prop_by_time, p_nuc_global, p_prop_global, \
         all_frames_nucleators_mask, all_frames_propagators_mask, accumulated_fraction_of_death_by_time =\
-            calc_single_experiment_temporal_p_nuc_and_p_prop_and_endpoint_readouts(single_exp_full_path=path_to_testing_csv)
+            calc_single_experiment_temporal_p_nuc_and_p_prop_and_endpoint_readouts_explicit_temporal_resolution(single_exp_full_path=path_to_testing_csv)
 
         self.assertAlmostEqual(1, p_nuc_global + p_prop_global, places=2)
 

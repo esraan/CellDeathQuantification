@@ -402,7 +402,6 @@ def scatter_with_linear_regression_line(x: np.array, y: np.array, x_label: str, 
         plt.show()
     plt.close(fig=fig)
 
-
 if __name__ == '__main__':
     # visualize_cell_death_in_time(xyt_path='Data/Experiments_XYT_CSV/20180620_HAP1_erastin_xy6.csv',
     #                              to_save_path=os.sep.join(['Results/CellDeathVisualizations', '20180620_HAP1_erastin_xy6_cell_death.png']))
@@ -420,3 +419,61 @@ if __name__ == '__main__':
                                      full_path_to_save_fig=os.sep.join(
                                          ['Results/CellDeathVisualizations',
                                           path.split(os.sep)[-1].replace('.csv', '_skt_cell_death.png')]))
+
+
+def plot_endpoint_readout_for_compressed_temporal_resolution(temporal_resolution_axis: np.array,
+                                                             endpoint_readouts_values_p_nuc: np.array,
+                                                             endpoint_readouts_values_p_prop: np.array,
+                                                             exp_treatment: str,
+                                                             exp_name: str,
+                                                             full_path_to_save_fig: str = None,
+                                                             **kwargs):
+    fig, axis = plt.subplots(1, 2)
+    fig.suptitle(f'Experiment:{exp_name}\nTreatment{exp_treatment}')
+    x_axis = np.arange(0, len(temporal_resolution_axis), 1)
+    axis[0].scatter(x_axis, endpoint_readouts_values_p_nuc)
+    axis[0].set_xticks(x_axis)
+    axis[0].set_xticklabels([f'{x}' for x in temporal_resolution_axis])
+    axis[0].set_xlabel('Temporal resolution (Minutes)')
+    axis[0].set_ylabel('Fraction of Nucleators')
+    axis[0].set_ylim((0, 1))
+
+    axis[1].scatter(x_axis, endpoint_readouts_values_p_prop)
+    axis[1].set_xticks(x_axis)
+    axis[1].set_xticklabels([f'{x}' for x in temporal_resolution_axis])
+    axis[1].set_xlabel('Temporal resolution (Minutes)')
+    axis[1].set_ylabel('Fraction of Propagators')
+    axis[1].set_ylim((0, 1))
+
+    plt.tight_layout()
+
+    if SHOWFIG:
+        plt.show()
+    elif SAVEFIG:
+        exp_treatment = exp_treatment.replace('\\', '_').replace('/', '_')
+        recent_death_only = kwargs.get('only_recent_death_flag_for_neighbors_calc', RECENT_DEATH_ONLY_FLAG)
+        if recent_death_only:
+            path_for_plot_dir = full_path_to_save_fig if full_path_to_save_fig is not None else \
+                os.sep.join(
+                    os.getcwd().split(os.sep)[:-1] + ['Results',
+                                                      'Compressed_MeasurementsEndpointReadoutsPlots',
+                                                      'Only recent death considered for neighbors results',
+                                                      'SingleExperimentsCompressionComparisons',
+                                                      f'{exp_treatment}'])
+        else:
+            path_for_plot_dir = full_path_to_save_fig if full_path_to_save_fig is not None else \
+                os.sep.join(
+                    os.getcwd().split(os.sep)[:-1] + ['Results',
+                                                      'Compressed_MeasurementsEndpointReadoutsPlots',
+                                                      'SingleExperimentsCompressionComparisons',
+                                                      f'{exp_treatment}'])
+        if not os.path.isdir(path_for_plot_dir):
+            os.makedirs(path_for_plot_dir)
+
+        path_for_plot = os.sep.join([path_for_plot_dir, f'{exp_name}'])
+        plt.savefig(f'{path_for_plot}.png', dpi=200)
+        plt.savefig(f'{path_for_plot}.eps', dpi=200)
+
+    plt.close(fig)
+
+

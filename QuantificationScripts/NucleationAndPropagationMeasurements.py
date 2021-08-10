@@ -324,33 +324,30 @@ def calc_single_time_frame_p_nuc_p_prop_probabilities_and_nucleators_and_propaga
            total_dead_in_next_frame_indices, total_alive_in_current_frame_indices, accumulated_fraction_of_death
 
 
-def calc_single_experiment_temporal_p_nuc_and_p_prop_and_endpoint_readouts(single_exp_full_path: str, **kwargs) -> \
+def calc_single_experiment_temporal_p_nuc_and_p_prop_and_endpoint_readouts_provided_temporal_resolution(
+        single_exp_full_path: str, temporal_resolution: int = None, **kwargs) -> \
         Tuple[
             np.array, np.array, float, float, np.array, np.array, np.array]:
     """
     calculates the experiment P(Nuc) & P(Prop) about time and endpoint readouts.
     also aggregates and returns masks for nucleators and propagators cells (endpoint readout as well).
     returns the p_nuc_by_time, p_prop_by_time, p_nuc_global, p_prop_global, nucleators_mask, propagators_mask
-    and accumulated_death_fraction_by_time
-    :param single_exp_full_path:
+    and accumulated_death_fraction_by_time.
+    MUST BE PROVIDE TEMPORAL RESOLUTION
+    :param single_exp_full_path: str
+    :param temporal_resolution: int
     :return:
     """
+    assert temporal_resolution, f'temporal resolution must not be None or negative! the value is f{temporal_resolution}'
+
     only_recent_death_flag_for_neighbors_calc = kwargs.get('only_recent_death_flag_for_neighbors_calc', False)
 
     cells_loci, cells_times_of_death = read_experiment_cell_xy_and_death_times(exp_full_path=single_exp_full_path)
     all_death_times_unique = np.unique(cells_times_of_death)
 
-    compressed_flag = False
-    if 'compressed' in single_exp_full_path.lower():
-        compressed_flag = True
-
-    exp_treatment, explicit_temporal_resolution = \
-        get_exp_treatment_type_and_temporal_resolution(single_exp_full_path.split(os.sep)[-1],
-                                                       compressed_flag=compressed_flag)
-
     # adds a fake frame before the start of the experiment to calc nucleation and propagation events at first frame
-    all_death_times_unique = np.arange(-explicit_temporal_resolution, all_death_times_unique.max(),
-                                       explicit_temporal_resolution)
+    all_death_times_unique = np.arange(-temporal_resolution, all_death_times_unique.max(),
+                                       temporal_resolution)
     # all_death_times_unique = np.array([-explicit_temporal_resolution] + all_death_times_unique.tolist())
 
     dist_threshold = kwargs.get('dist_threshold', DIST_THRESHOLD_IN_PIXELS)
@@ -377,7 +374,7 @@ def calc_single_experiment_temporal_p_nuc_and_p_prop_and_endpoint_readouts(singl
                 cells_times_of_death=cells_times_of_death,
                 cells_neighbors=cells_neighbors_lvl1,
                 timeframe_to_analyze=current_time,
-                temporal_resolution=explicit_temporal_resolution,
+                temporal_resolution=temporal_resolution,
                 only_recent_death_flag_for_neighbors_calc=only_recent_death_flag_for_neighbors_calc)
 
         p_prop_by_time[time_frame_idx] = single_frame_p_prop
@@ -399,6 +396,32 @@ def calc_single_experiment_temporal_p_nuc_and_p_prop_and_endpoint_readouts(singl
 
     return p_nuc_by_time, p_prop_by_time, p_nuc_global, p_prop_global, \
            all_frames_nucleators_mask, all_frames_propagators_mask, accumulated_death_fraction_by_time
+
+
+def calc_single_experiment_temporal_p_nuc_and_p_prop_and_endpoint_readouts_explicit_temporal_resolution(single_exp_full_path: str, **kwargs) -> \
+        Tuple[
+            np.array, np.array, float, float, np.array, np.array, np.array]:
+    """
+    calculates the experiment P(Nuc) & P(Prop) about time and endpoint readouts.
+    also aggregates and returns masks for nucleators and propagators cells (endpoint readout as well).
+    returns the p_nuc_by_time, p_prop_by_time, p_nuc_global, p_prop_global, nucleators_mask, propagators_mask
+    and accumulated_death_fraction_by_time
+    :param single_exp_full_path: str
+    :return:
+    """
+
+    compressed_flag = False
+    if 'compressed' in single_exp_full_path.lower():
+        compressed_flag = True
+
+    exp_treatment, explicit_temporal_resolution = \
+        get_exp_treatment_type_and_temporal_resolution(single_exp_full_path.split(os.sep)[-1],
+                                                       compressed_flag=compressed_flag)
+    return calc_single_experiment_temporal_p_nuc_and_p_prop_and_endpoint_readouts_provided_temporal_resolution(
+        single_exp_full_path=single_exp_full_path,
+        temporal_resolution=explicit_temporal_resolution,
+        **kwargs
+    )
 
 
 def calc_and_visualize_all_experiments_csvs_in_dir(dir_path: str = None,
@@ -463,8 +486,8 @@ def calc_and_visualize_all_experiments_csvs_in_dir(dir_path: str = None,
         p_nuc_by_time, p_prop_by_time, p_nuc_global, p_prop_global, \
         all_frames_nucleators_mask, all_frames_propagators_mask, \
         accumulated_fraction_of_death_by_time = \
-            calc_single_experiment_temporal_p_nuc_and_p_prop_and_endpoint_readouts(single_exp_full_path=file_full_path,
-                                                                                   only_recent_death_flag_for_neighbors_calc=only_recent_death_flag_for_neighbors_calc)
+            calc_single_experiment_temporal_p_nuc_and_p_prop_and_endpoint_readouts_explicit_temporal_resolution(single_exp_full_path=file_full_path,
+                                                                                                                only_recent_death_flag_for_neighbors_calc=only_recent_death_flag_for_neighbors_calc)
 
         all_treatment_types.append(exp_treatment)
         all_temporal_resolutions.append(exp_temporal_res)
@@ -590,6 +613,7 @@ def calc_distance_metric_between_experiments_results_of_altering_flag_values(dir
 
     for treatment_name in by_treatment_scores_first_flag_value_p_nuc.keys():
         metric_to_use = kwargs.get('distance_metric', 'rmse')
+        # todo: change metric to kl-divergence
         by_treatment_distance_metric_score_p_nuc[treatment_name] = \
             calc_distance_metric_between_signals(y_true=by_treatment_scores_first_flag_value_p_nuc[treatment_name],
                                                  y_pred=by_treatment_scores_second_flag_value_p_nuc[treatment_name],
@@ -599,9 +623,11 @@ def calc_distance_metric_between_experiments_results_of_altering_flag_values(dir
                                                  y_pred=by_treatment_scores_second_flag_value_p_prop[treatment_name],
                                                  metric=metric_to_use)
     if kwargs.get('visualize_flag', True):
-        visualize_rmse_of_altering_flag_values_by_treatment(p_nuc_rmse_by_treatment=by_treatment_distance_metric_score_p_nuc,
-                                                            p_prop_rmse_by_treatment=by_treatment_distance_metric_score_p_prop,
-                                                            flag_name=flag_key[:18])
+        # todo: change visualization to a a more informative plot, focus on specific treatments.
+        visualize_rmse_of_altering_flag_values_by_treatment(
+            p_nuc_rmse_by_treatment=by_treatment_distance_metric_score_p_nuc,
+            p_prop_rmse_by_treatment=by_treatment_distance_metric_score_p_prop,
+            flag_name=flag_key[:18])
 
     return by_treatment_distance_metric_score_p_nuc, by_treatment_distance_metric_score_p_prop
 
