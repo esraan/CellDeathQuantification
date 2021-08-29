@@ -3,6 +3,7 @@ from typing import *
 import numpy as np
 import pandas as pd
 from scipy.spatial import Voronoi
+from scipy.stats import linregress
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error as mse
 from sklearn.metrics.pairwise import euclidean_distances as euc_dis
@@ -219,10 +220,14 @@ def kl_divergence(p: np.array, q: np.asarray) -> np.ndarray:
     :param q: np array - signal from distribution b
     :return: float
     """
+    if type(p) is not type(np.array) or type(q) is not type(np.array):
+        p = np.array(p)
+        q = np.array(q)
+
     return np.sum(np.where(p != 0, p * np.log(p / q), 0))
 
 
-def get_real_distance_between_cells_in_pixels(cell1_xy: Tuple, cell2_xy: Tuple) -> float:
+def get_euclidean_distance_between_cells_in_pixels(cell1_xy: Tuple, cell2_xy: Tuple) -> float:
     """
     returns the real distance
     :param cell1_xy:
@@ -271,7 +276,7 @@ def get_cells_neighbors(XY, threshold_dist: Union[int, float] = None):
             neighbors_list[x[0]].append(x[1])
             neighbors_list[x[1]].append(x[0])
         else:
-            if get_real_distance_between_cells_in_pixels(XY[x[0]], XY[x[1]]) <= threshold_dist:
+            if get_euclidean_distance_between_cells_in_pixels(XY[x[0]], XY[x[1]]) <= threshold_dist:
                 neighbors_list[x[0]].append(x[1])
                 neighbors_list[x[1]].append(x[0])
 
@@ -352,7 +357,7 @@ def get_cells_not_neighboring_dead_cells(dead_cells_mask, neighbors, neighbors_l
             curr_neighbors = neighbors[cell_idx]
             for neighbor_idx in curr_neighbors:
                 if xy is not None:
-                    dist = get_real_distance_between_cells_in_pixels(cell1_xy=xy[cell_idx], cell2_xy=xy[neighbor_idx])
+                    dist = get_euclidean_distance_between_cells_in_pixels(cell1_xy=xy[cell_idx], cell2_xy=xy[neighbor_idx])
                     around_dead_cells[neighbor_idx] = (True) * (dist < threshold)
 
     # get complementary & alive cells that are not near dead cells
@@ -397,7 +402,25 @@ def calc_distance_metric_between_signals(y_true: np.array, y_pred: np.array, met
         return mse(y_true=y_true, y_pred=y_pred, squared=False)
     if metric == 'mse':
         return mse(y_true=y_true, y_pred=y_pred, squared=True)
-    if metric == 'kl_div':
+    if metric == 'kl_divergence':
         return kl_divergence(y_true, y_pred)
     if metric == 'euclidean':
         return euc_dis(y_true, y_pred).mean()
+
+
+def calc_signal_slope(x: np.array = None, y: np.array = None) -> Tuple[float, float]:
+    """
+    calculates a signal slope and intercept using scipy linegress model.
+    if x is not given, this function generates an array of consequential indices with an interval of 1 and
+    uses it as the signal x-axis.
+    the function returns the slope and intercept attributes of the calculated linegress object.
+    :param x: np.array - the signal x-axis
+    :param y: np.array - the signal values (y-axis)
+    :return: Tuple[float,float], slope and intercept accordingly
+    """
+    assert y is not None, 'Y cant be None!'
+    if x is None:
+        x = np.arange(0, len(y), 1)
+
+    lr_object = linregress(x, y)
+    return lr_object.slope, lr_object.intercept

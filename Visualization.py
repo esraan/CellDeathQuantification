@@ -1,4 +1,6 @@
 import os
+import warnings
+
 import numpy as np
 import pandas as pd
 import matplotlib as mpl
@@ -10,27 +12,44 @@ from utils import *
 # todo: add documentation to all functions
 
 
-def visualize_rmse_of_altering_flag_values_by_treatment(p_nuc_rmse_by_treatment: dict, p_prop_rmse_by_treatment: dict,
-                                                        flag_name: str, full_path_to_save_fig: str = None,
-                                                        **kwargs):
+def visualize_distance_metric_of_altering_flag_values_by_treatment(p_nuc_distance_by_treatment: dict,
+                                                                   p_prop_distance_by_treatment: dict,
+                                                                   flag_name: str, full_path_to_save_fig: str = None,
+                                                                   **kwargs):
     plt.clf()
+    distance_metric_name = kwargs.get('distance_metric_name', 'RMSE')
+    visualize_specific_treatments = kwargs.get('visualize_specific_treatments', 'all')
 
-    fig, axis = plt.subplots(1, 2)
-    treatments_axis = np.arange(0, len(p_nuc_rmse_by_treatment), 1)
-    axis[0].bar(x=treatments_axis, height=list(p_nuc_rmse_by_treatment.values()))
-    axis[0].set_xticks(treatments_axis)
-    axis[0].set_xticklabels(list(p_nuc_rmse_by_treatment.keys()))
-    axis[0].tick_params(axis='x', labelrotation=90, labelsize=kwargs.get('x_tick_label_size', 4))
-    axis[0].set_ylabel(f'RMSE between {flag_name} results')
-    axis[0].set_title('P(Nuc)')
+    if visualize_specific_treatments != 'all' and type(visualize_specific_treatments) == type(list()):
+        full_treatment_names = []
+        for full_treatment_name in p_prop_distance_by_treatment.keys():
+            for given_treatment_name in visualize_specific_treatments:
+                if given_treatment_name.lower() in full_treatment_name.lower():
+                    full_treatment_names.append(full_treatment_name)
 
-    axis[1].bar(x=treatments_axis, height=list(p_prop_rmse_by_treatment.values()))
-    axis[1].set_xticks(treatments_axis)
-    axis[1].set_xticklabels(list(p_prop_rmse_by_treatment.keys()))
-    axis[1].tick_params(axis='x', labelrotation=90, labelsize=kwargs.get('x_tick_label_size', 4))
-    axis[1].set_ylabel(f'RMSE between {flag_name} results')
-    axis[1].set_title('P(Prop)')
+        p_nuc_distance_by_treatment = {key: val for key, val in p_nuc_distance_by_treatment.items() if key in full_treatment_names}
+        p_prop_distance_by_treatment = {key: val for key, val in p_prop_distance_by_treatment.items() if key in full_treatment_names}
 
+    fig, ax = plt.subplots()
+    treatments_axis = np.arange(0, len(p_nuc_distance_by_treatment), 1)
+    ax.bar(x=treatments_axis, height=list(p_nuc_distance_by_treatment.values()), color=(1,0,0,.8),
+           label='Fraction of Nucleators')
+    ax.set_xticks(treatments_axis)
+    ax.set_xticklabels(list(p_nuc_distance_by_treatment.keys()))
+    ax.tick_params(axis='x', labelrotation=-45, labelsize=kwargs.get('x_tick_label_size', 8))
+    ax.set_ylabel(f'{distance_metric_name} distance between {flag_name} results')
+    ax.set_title('P(Nuc)')
+
+    ax.bar(x=treatments_axis, height=list(p_prop_distance_by_treatment.values()), color=(0,1,1,.8),
+           label='Fraction of Propagators')
+    ax.set_xticks(treatments_axis)
+    ax.set_xticklabels(list(p_prop_distance_by_treatment.keys()))
+    ax.tick_params(axis='x', labelrotation=-45, labelsize=kwargs.get('x_tick_label_size', 8))
+    ax.set_ylabel(f'{distance_metric_name} distance between {flag_name} results')
+    ax.set_title('P(Prop)')
+
+    ax.legend()
+    plt.setp(ax.xaxis.get_majorticklabels(), ha="left", rotation_mode="anchor")
     plt.tight_layout()
 
     if SHOWFIG:
@@ -45,9 +64,10 @@ def visualize_rmse_of_altering_flag_values_by_treatment(p_nuc_rmse_by_treatment:
             os.makedirs(path_for_plot_dir)
 
         path_for_plot = os.sep.join([path_for_plot_dir,
-                                     f'global_p_nuc_vs_p_prop_all_exps_flag={flag_name}_rmse_scores.png'])
+                                     f'global_p_nuc_vs_p_prop_all_exps_flag={flag_name}_{distance_metric_name}_distance_scores'])
 
-        plt.savefig(path_for_plot, dpi=200)
+        plt.savefig(path_for_plot+'.png', dpi=200)
+        plt.savefig(path_for_plot + '.eps', dpi=200)
 
     plt.close(fig)
 
@@ -146,42 +166,112 @@ def visualize_endpoint_readouts_by_treatment_to_varying_calculation_flags(xy1_re
     plt.close(fig)
 
 
-def visualize_endpoint_readouts_by_treatment(x_readout: np.array,
-                                             y_readout: np.array,
-                                             treatment_per_readout: np.array,
-                                             full_path_to_save_fig: str = None,
-                                             x_label: str = 'Fraction of Nucleators',
-                                             y_label: str = 'Fraction of Propagators',
-                                             use_log: bool = False):
+def visualize_endpoint_readouts_by_treatment_about_readouts(x_readout: np.array,
+                                                            y_readout: np.array,
+                                                            treatment_per_readout: np.array,
+                                                            full_path_to_save_fig: str = None,
+                                                            x_label: str = 'Fraction of Nucleators',
+                                                            y_label: str = 'Fraction of Propagators',
+                                                            use_log: bool = False,
+                                                            plot_about_treatment: bool = False,
+                                                            **kwargs):
     if use_log:
         x_readout = np.log10(x_readout)
         y_readout = np.log10(y_readout)
+    if plot_about_treatment:
+        fig, axis = plt.subplots(1, 2)
+        unique_treatments = set(treatment_per_readout)
+        x_axis_dict = {treatment_name:idx for idx, treatment_name in enumerate(unique_treatments)}
+        # x_axis = np.arange(0, len(x_readout), 1)
+    else:
+        fig, ax = plt.subplots()  # figsize=(10, 10))
 
-    fig, ax = plt.subplots()#figsize=(10, 10))
     marker_per_point, color_per_point, treatment_to_marker, treatment_to_color = \
         get_marker_per_treatment_list(treatment_per_readout)
+
     for point_idx, xy in enumerate(zip(x_readout, y_readout)):
         x, y = xy
         marker = marker_per_point[point_idx]
         color = color_per_point[point_idx]
-        marker_size = 10 if 'tnf' in treatment_per_readout[point_idx].lower() else 5
-        ax.plot(x, y, ms=marker_size, marker=marker, color=color, label=treatment_per_readout[point_idx])
+        treatment_name = treatment_per_readout[point_idx]
+        marker_size = 10 if 'tnf' in treatment_name.lower() else 5
+
+        if plot_about_treatment:
+            treatment_idx = x_axis_dict[treatment_name]
+            axis[0].plot(treatment_idx, x, ms=marker_size, marker=marker,
+                         color=color, label=treatment_per_readout[point_idx])
+            axis[1].plot(treatment_idx, y, ms=marker_size, marker=marker,
+                         color=color, label=treatment_per_readout[point_idx])
+        else:
+            ax.plot(x, y, ms=marker_size, marker=marker,
+                    color=color, label=treatment_per_readout[point_idx])
+
     custom_handles, custom_lables = get_custom_legend_artists(labels_to_colors=treatment_to_color,
                                                               labels_to_markers=treatment_to_marker)
-    # lgd = ax.legend(handles=custom_handles, labels=custom_lables, loc='best', bbox_to_anchor=(1.05, 1))
-    # handles, labels = ax.get_legend_handles_labels()
-    ax.grid('on')
-    ax.set_xlabel('Log' + x_label if use_log else x_label)
-    ax.set_ylabel('Log' + y_label if use_log else y_label)
-    ax.set_title('Log(Fraction) of Nucleators & Propagators' if use_log else 'Fraction of Nucleators & Propagators')
 
-    if not use_log:
-        ax.set_xticks([0.1, .30])
-        ax.set_yticks([0.6, 0.95])
+    if plot_about_treatment:
+        # temporal_unit = 'Minutes' if temporal_resolution != 1 else 'Frame#'
+        axis[0].grid('on')
+        axis[0].set_xlabel(f'Treatment type')
+        axis[0].set_title('Log ' + x_label if use_log else x_label)
+        axis[1].grid('on')
+        axis[1].set_xlabel(f'Treatment type')
+        axis[1].set_title('Log ' + y_label if use_log else y_label)
+
+        if not use_log:
+            axis[0].set_xticks(np.arange(0, len(x_axis_dict), 1))
+            axis[0].set_xticklabels(list(x_axis_dict.keys()))
+            axis[0].tick_params(axis='x', labelrotation=-45, labelsize=kwargs.get('x_tick_label_size', 4))
+            axis[1].set_xticks(np.arange(0, len(x_axis_dict), 1))
+            axis[1].set_xticklabels(list(x_axis_dict.keys()))
+            axis[1].tick_params(axis='x', labelrotation=-45, labelsize=kwargs.get('x_tick_label_size', 4))
+
+        else:
+            axis[0].set_xticks(np.arange(0, len(x_axis_dict), 1))
+            axis[0].set_xticklabels(list(x_axis_dict.keys()))
+            axis[0].tick_params(axis='x', labelrotation=-45, labelsize=kwargs.get('x_tick_label_size', 4))
+            axis[1].set_xticks(np.arange(0, len(x_axis_dict), 1))
+            axis[1].set_xticklabels(list(x_axis_dict.keys()))
+            axis[1].tick_params(axis='x', labelrotation=-45, labelsize=kwargs.get('x_tick_label_size', 4))
+
+        plt.setp(axis[0].xaxis.get_majorticklabels(), ha="left", rotation_mode="anchor")
+        plt.setp(axis[1].xaxis.get_majorticklabels(), ha="left", rotation_mode="anchor")
+
+        if not use_log:
+            if RECENT_DEATH_ONLY_FLAG:
+                y_tick_limits_x_label = [0.15, 0.6]
+                y_tick_limits_y_label = [0.35, 0.9]
+            else:
+                y_tick_limits_x_label = [0.1, 0.3]
+                y_tick_limits_y_label = [0.7, 0.95]
+        else:
+            if RECENT_DEATH_ONLY_FLAG:
+                y_tick_limits_x_label = [-0.8, -0.2]
+                y_tick_limits_y_label = [-0.4, 0]
+            else:
+                y_tick_limits_x_label = [-1, -0.5]
+                y_tick_limits_y_label = [-0.2, 0]
+
+        axis[0].set_ylim(y_tick_limits_x_label)
+        axis[1].set_ylim(y_tick_limits_y_label)
+
     else:
-        ax.set_xticks([-1, 0])
-        ax.set_yticks([-.4, 0])
+        ax.grid('on')
+        ax.set_xlabel('Log ' + x_label if use_log else x_label)
+        ax.set_ylabel('Log ' + y_label if use_log else y_label)
+        ax.set_title('Log(Fraction) of Nucleators & Propagators' if use_log else 'Fraction of Nucleators & Propagators')
+        if not use_log:
+            x_tick_limits = [0.1, .30]
+            y_tick_limits = [0.6, 0.95]
+        else:
+            x_tick_limits = [-1, 0]
+            y_tick_limits = [-.4, 0]
+
+        ax.set_xlim(x_tick_limits)
+        ax.set_ylim(y_tick_limits)
+
     plt.tight_layout()
+
     if SHOWFIG:
         plt.show()
     elif SAVEFIG:
@@ -198,15 +288,15 @@ def visualize_endpoint_readouts_by_treatment(x_readout: np.array,
         if not os.path.isdir(path_for_plot_dir):
             os.makedirs(path_for_plot_dir)
 
+        plot_about_time_path_addition = '_about_treatment' if plot_about_treatment else ''
         if use_log:
-            path_for_plot = os.sep.join([path_for_plot_dir, f'LOG_global_p_nuc_vs_p_prop_all_exps.png'])
+            path_for_plot = os.sep.join([path_for_plot_dir, f'LOG_global_p_nuc_vs_p_prop_all_exps{plot_about_time_path_addition}'])
         else:
-            path_for_plot = os.sep.join([path_for_plot_dir, f'global_p_nuc_vs_p_prop_all_exps.png'])
-        plt.savefig(path_for_plot, dpi=200)  # , bbox_extra_artists=[lgd], bbox_inches='tight')
+            path_for_plot = os.sep.join([path_for_plot_dir, f'global_p_nuc_vs_p_prop_all_exps{plot_about_time_path_addition}'])
+        plt.savefig(path_for_plot + '.png', dpi=200)  # , bbox_extra_artists=[lgd], bbox_inches='tight')
+        plt.savefig(path_for_plot + '.eps', dpi=200)  # , bbox_extra_artists=[lgd], bbox_inches='tight')
 
     plt.close(fig)
-
-
 def visualize_cell_death_in_time(xyt_df: pd.DataFrame = None,
                                  xyt_full_path: str = None,
                                  nucleators_mask: np.array = None,
@@ -241,17 +331,17 @@ def visualize_cell_death_in_time(xyt_df: pd.DataFrame = None,
     min_time_of_death, max_time_of_death = death_times.min(), death_times.max()
     fig, ax = plt.subplots()
 
-    cmap = mpl.cm.__builtin_cmaps[13]
+    cmap = mpl.cm.__builtin_cmaps[12]
     ax.scatter(x, y, c=death_times, cmap=cmap)
 
     # mark nucleators
     if nucleators_mask is not None:
         nucleators_indices = np.where(nucleators_mask)[0]
-        ax.scatter(x[(nucleators_indices)], y[(nucleators_indices)], marker='x', color=(1, 0, 0, .5))
+        ax.scatter(x[(nucleators_indices)], y[(nucleators_indices)], marker='x', color=(0, 1, 0, .5))
     # mark propagators
     if propagators_maks is not None:
         propagators_indices = np.where(propagators_maks)[0]
-        ax.scatter(x[(propagators_indices)], y[(propagators_indices)], marker='+', color=(1, 1, 0, .5))
+        ax.scatter(x[(propagators_indices)], y[(propagators_indices)], marker='+', color=(1, 0, 1, .5))
 
     ax.set_xticks([])
     ax.set_yticks([])
@@ -354,16 +444,20 @@ def plot_measurements_by_time(p_nuc_by_time: np.array,
         if not os.path.isdir(path_for_plot_dir):
             os.makedirs(path_for_plot_dir)
 
-        path_for_plot = os.sep.join([path_for_plot_dir, f'{exp_name}.png'])
-        plt.savefig(path_for_plot, dpi=200)
+        path_for_plot = os.sep.join([path_for_plot_dir, f'{exp_name}'])
+        plt.savefig(path_for_plot+'.png', dpi=200)
+        plt.savefig(path_for_plot + '.eps', dpi=200)
 
     plt.close(fig)
 
 
 def scatter_with_linear_regression_line(x: np.array, y: np.array, x_label: str, y_label: str, title: str,
-                                        path_to_save_fig: str, plot_linear_regression: bool = False):
+                                        path_to_save_fig: str, plot_linear_regression: bool = False,
+                                        color_map: dict = None, colors: np.array = None):
     """
 
+    :param colors:
+    :param color_map:
     :param plot_linear_regression:
     :param x:
     :param y:
@@ -377,7 +471,11 @@ def scatter_with_linear_regression_line(x: np.array, y: np.array, x_label: str, 
 
     fig, ax = plt.subplots()
     # plot probabilities for each level of neighborhoods
-    ax.scatter(x, y, color=(0, 1, 0, 0.8), marker='*')
+    if color_map is None or colors is None:
+        ax.scatter(x, y, s=50, color=(0, 1, 0, 0.8), marker='*')
+    else:
+        ax.scatter(x, y, s=50, marker='*', c=colors, cmap=color_map)
+
     if plot_linear_regression:
         # plot linear regression line
         regression_line_x, regression_line_y = get_linear_regression_line_between_two_signals(x, y)
@@ -393,6 +491,10 @@ def scatter_with_linear_regression_line(x: np.array, y: np.array, x_label: str, 
     ax.set_ylim((0, 1))
     ax.set_xlim((0, 1))
 
+    if colors is not None and color_map is not None:
+        norm = mpl.colors.Normalize(vmin=colors.min(), vmax=colors.max())
+        plt.colorbar(cm.ScalarMappable(norm=norm, cmap=color_map), ax=ax, label='time of death')
+
     plt.tight_layout()
 
     if SAVEFIG:
@@ -401,6 +503,7 @@ def scatter_with_linear_regression_line(x: np.array, y: np.array, x_label: str, 
     elif SHOWFIG:
         plt.show()
     plt.close(fig=fig)
+
 
 if __name__ == '__main__':
     # visualize_cell_death_in_time(xyt_path='Data/Experiments_XYT_CSV/20180620_HAP1_erastin_xy6.csv',
