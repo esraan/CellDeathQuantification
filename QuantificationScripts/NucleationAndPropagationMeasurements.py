@@ -398,7 +398,8 @@ def calc_single_experiment_temporal_p_nuc_and_p_prop_and_endpoint_readouts_provi
            all_frames_nucleators_mask, all_frames_propagators_mask, accumulated_death_fraction_by_time
 
 
-def calc_single_experiment_temporal_p_nuc_and_p_prop_and_endpoint_readouts_explicit_temporal_resolution(single_exp_full_path: str, **kwargs) -> \
+def calc_single_experiment_temporal_p_nuc_and_p_prop_and_endpoint_readouts_explicit_temporal_resolution(
+        single_exp_full_path: str, **kwargs) -> \
         Tuple[
             np.array, np.array, float, float, np.array, np.array, np.array]:
     """
@@ -413,10 +414,12 @@ def calc_single_experiment_temporal_p_nuc_and_p_prop_and_endpoint_readouts_expli
     compressed_flag = False
     if 'compressed' in single_exp_full_path.lower():
         compressed_flag = True
+    meta_data_path = os.sep.join(single_exp_full_path.split(os.sep)[:-2] + ['ExperimentsMetaData.csv'])
 
     exp_treatment, explicit_temporal_resolution = \
         get_exp_treatment_type_and_temporal_resolution(single_exp_full_path.split(os.sep)[-1],
-                                                       compressed_flag=compressed_flag)
+                                                       compressed_flag=compressed_flag,
+                                                       meta_data_file_full_path=meta_data_path)
     return calc_single_experiment_temporal_p_nuc_and_p_prop_and_endpoint_readouts_provided_temporal_resolution(
         single_exp_full_path=single_exp_full_path,
         temporal_resolution=explicit_temporal_resolution,
@@ -447,7 +450,7 @@ def calc_and_visualize_all_experiments_csvs_in_dir(dir_path: str = None,
     only_recent_death_flag_for_neighbors_calc = kwargs.get('only_recent_death_flag_for_neighbors_calc',
                                                            RECENT_DEATH_ONLY_FLAG)
 
-    visualize_flag = kwargs.get('visualize', True)
+    visualize_flag = kwargs.get('visualize_flag', True)
 
     use_log_flag = kwargs.get('use_log', USE_LOG)
 
@@ -480,14 +483,17 @@ def calc_and_visualize_all_experiments_csvs_in_dir(dir_path: str = None,
         if 'compressed' in file_full_path.lower():
             compressed_flag = True
 
+        meta_data_file_path = os.sep.join(dir_path.split(os.sep)[:-1] + ['ExperimentsMetaData.csv'])
         exp_treatment, exp_temporal_res = get_exp_treatment_type_and_temporal_resolution(
-            exp_file_name=exp_name + '.csv', compressed_flag=compressed_flag)
+            exp_file_name=exp_name + '.csv', meta_data_file_full_path=meta_data_file_path,
+            compressed_flag=compressed_flag)
 
         p_nuc_by_time, p_prop_by_time, p_nuc_global, p_prop_global, \
         all_frames_nucleators_mask, all_frames_propagators_mask, \
         accumulated_fraction_of_death_by_time = \
-            calc_single_experiment_temporal_p_nuc_and_p_prop_and_endpoint_readouts_explicit_temporal_resolution(single_exp_full_path=file_full_path,
-                                                                                                                only_recent_death_flag_for_neighbors_calc=only_recent_death_flag_for_neighbors_calc)
+            calc_single_experiment_temporal_p_nuc_and_p_prop_and_endpoint_readouts_explicit_temporal_resolution(
+                single_exp_full_path=file_full_path,
+                only_recent_death_flag_for_neighbors_calc=only_recent_death_flag_for_neighbors_calc)
 
         all_treatment_types.append(exp_treatment)
         all_temporal_resolutions.append(exp_temporal_res)
@@ -507,12 +513,93 @@ def calc_and_visualize_all_experiments_csvs_in_dir(dir_path: str = None,
                                       temporal_resolution=exp_temporal_res, exp_name=exp_name,
                                       exp_treatment=exp_treatment)
     if visualize_flag:
-        visualize_endpoint_readouts_by_treatment(x_readout=np.array(all_global_p_nuc),
-                                                 y_readout=np.array(all_global_p_prop),
-                                                 treatment_per_readout=np.array(all_treatment_types),
-                                                 use_log=use_log_flag)
+        visualize_endpoint_readouts_by_treatment_about_readouts(x_readout=np.array(all_global_p_nuc),
+                                                                y_readout=np.array(all_global_p_prop),
+                                                                treatment_per_readout=np.array(all_treatment_types),
+                                                                use_log=use_log_flag,
+                                                                plot_about_treatment=True)
 
     return np.array(all_global_p_nuc), np.array(all_global_p_prop), np.array(all_treatment_types)
+
+
+def calc_distance_metric_between_experiments_results_of_altering_flag_values(dir_path: str = None,
+                                                                             limit_exp_num: int = float('inf'),
+                                                                             flag_key: str = 'only_recent_death_flag_for_neighbors_calc',
+                                                                             flag_values: Tuple = (True, False),
+                                                                             **kwargs):
+    """
+    aggregates endpoint readouts calculated by calc_all_experiments_csvs_in_dir_with_altering_flag_values function.
+    compares the results of each analysis according the the flag value and calculates a distance metric between
+    the results (default is rmse), the distance metric is given in the kwargs under 'distance_metric' key.
+    the flags arguments are identical to calc_all_experiments_csvs_in_dir_with_altering_flag_values function's arguments.
+    9/08/2021 - supports the metrics appearing in utils.py/calc_distance_metric_between_signals function.
+    if visualize_flag in kwargs is set to true (which is the default value) also plots the distance metric results.
+    :param dir_path: str, the directory path which contains all csv files.
+    :param limit_exp_num: int, maximum number of experiments to analyze, default is infinity (to analyze all
+        experiments in the directory.
+    :param flag_key: str, the flag name to alternate its value and analyze by.
+    :param flag_values: Tuple, values of flags to analyze by.
+    :param kwargs:
+    :return: by_treatment_distance_metric_score_p_nuc - np.array, by_treatment_distance_metric_score_p_prop - np.array
+    """
+    all_global_p_nuc_p_prop_tuples_list, \
+    all_treatment_types_list = calc_all_experiments_csvs_in_dir_with_altering_flag_values(
+        dir_path=dir_path,
+        limit_exp_num=limit_exp_num,
+        flag_key=flag_key,
+        flag_values=flag_values)
+
+    visualize_flag = kwargs.get('visualize_flag', True)
+    metric_to_use = kwargs.get('distance_metric', 'rmse')
+
+    by_treatment_scores_first_flag_value_p_nuc = dict()
+    by_treatment_scores_second_flag_value_p_nuc = dict()
+    by_treatment_scores_first_flag_value_p_prop = dict()
+    by_treatment_scores_second_flag_value_p_prop = dict()
+
+    by_treatment_distance_metric_score_p_nuc = dict()
+    by_treatment_distance_metric_score_p_prop = dict()
+
+    for single_exp_idx, treatment_name in enumerate(all_treatment_types_list[0]):
+        # by_treatment_rmse_score[treatment_name] = by_treatment_rmse_score.get(treatment_name) + \
+        #                                           all_global_p_nuc_p_prop_tuples_list[0][single_exp_idx]
+        by_treatment_scores_first_flag_value_p_nuc[treatment_name] = \
+            by_treatment_scores_first_flag_value_p_nuc.get(treatment_name, []) + \
+            [all_global_p_nuc_p_prop_tuples_list[0][0][single_exp_idx]]
+        by_treatment_scores_second_flag_value_p_nuc[treatment_name] = \
+            by_treatment_scores_second_flag_value_p_nuc.get(treatment_name, []) + \
+            [all_global_p_nuc_p_prop_tuples_list[1][0][single_exp_idx]]
+
+        by_treatment_scores_first_flag_value_p_prop[treatment_name] = \
+            by_treatment_scores_first_flag_value_p_prop.get(treatment_name, []) + \
+            [all_global_p_nuc_p_prop_tuples_list[0][1][single_exp_idx]]
+        by_treatment_scores_second_flag_value_p_prop[treatment_name] = \
+            by_treatment_scores_second_flag_value_p_prop.get(treatment_name, []) + \
+            [all_global_p_nuc_p_prop_tuples_list[1][1][single_exp_idx]]
+
+    for treatment_name in by_treatment_scores_first_flag_value_p_nuc.keys():
+        by_treatment_distance_metric_score_p_nuc[treatment_name] = \
+            calc_distance_metric_between_signals(
+                y_true=np.array(by_treatment_scores_first_flag_value_p_nuc[treatment_name]),
+                y_pred=np.array(by_treatment_scores_second_flag_value_p_nuc[treatment_name]),
+                metric=metric_to_use)
+        by_treatment_distance_metric_score_p_prop[treatment_name] = \
+            calc_distance_metric_between_signals(
+                y_true=np.array(by_treatment_scores_first_flag_value_p_prop[treatment_name]),
+                y_pred=np.array(by_treatment_scores_second_flag_value_p_prop[treatment_name]),
+                metric=metric_to_use)
+    if visualize_flag:
+        visualize_specific_treatments = kwargs.get('visualize_specific_treatments', 'all')
+        # todo: change visualization to a a more informative plot, focus on specific treatments.
+        visualize_distance_metric_of_altering_flag_values_by_treatment(
+            p_nuc_distance_by_treatment=by_treatment_distance_metric_score_p_nuc,
+            p_prop_distance_by_treatment=by_treatment_distance_metric_score_p_prop,
+            flag_name=flag_key[:18],
+            distance_metric_name=metric_to_use,
+            visualize_specific_treatments=visualize_specific_treatments
+        )
+
+    return by_treatment_distance_metric_score_p_nuc, by_treatment_distance_metric_score_p_prop
 
 
 def calc_all_experiments_csvs_in_dir_with_altering_flag_values(dir_path: str = None,
@@ -543,93 +630,19 @@ def calc_all_experiments_csvs_in_dir_with_altering_flag_values(dir_path: str = N
             all_global_p_prop, \
             all_treatment_types = calc_and_visualize_all_experiments_csvs_in_dir(**flag_kwarg,
                                                                                  limit_exp_num=limit_exp_num,
-                                                                                 visualize=False)
+                                                                                 visualize_flag=False)
         else:
             all_global_p_nuc, \
             all_global_p_prop, \
             all_treatment_types = calc_and_visualize_all_experiments_csvs_in_dir(**flag_kwarg,
                                                                                  dir_path=dir_path,
                                                                                  limit_exp_num=limit_exp_num,
-                                                                                 visualize=False)
+                                                                                 visualize_flag=False)
 
         all_global_p_nuc_p_prop_tuples_list.append((all_global_p_nuc, all_global_p_prop))
         all_treatment_types_list.append(all_treatment_types)
 
     return all_global_p_nuc_p_prop_tuples_list, all_treatment_types_list
-
-
-def calc_distance_metric_between_experiments_results_of_altering_flag_values(dir_path: str = None,
-                                                                             limit_exp_num: int = float('inf'),
-                                                                             flag_key: str = 'only_recent_death_flag_for_neighbors_calc',
-                                                                             flag_values: Tuple = (True, False),
-                                                                             **kwargs):
-    """
-    aggregates endpoint readouts calculated by calc_all_experiments_csvs_in_dir_with_altering_flag_values function.
-    compares the results of each analysis according the the flag value and calculates a distance metric between
-    the results (default is rmse), the distance metric is given in the kwargs under 'distance_metric' key.
-    the flags arguments are identical to calc_all_experiments_csvs_in_dir_with_altering_flag_values function's arguments.
-    9/08/2021 - supports the metrics appearing in utils.py/calc_distance_metric_between_signals function.
-    if visualize_flag in kwargs is set to true (which is the default value) also plots the distance metric results.
-    :param dir_path: str, the directory path which contains all csv files.
-    :param limit_exp_num: int, maximum number of experiments to analyze, default is infinity (to analyze all
-        experiments in the directory.
-    :param flag_key: str, the flag name to alternate its value and analyze by.
-    :param flag_values: Tuple, values of flags to analyze by.
-    :param kwargs:
-    :return: by_treatment_distance_metric_score_p_nuc - np.array, by_treatment_distance_metric_score_p_prop - np.array
-    """
-    all_global_p_nuc_p_prop_tuples_list, \
-    all_treatment_types_list = calc_all_experiments_csvs_in_dir_with_altering_flag_values(
-        dir_path=dir_path,
-        limit_exp_num=limit_exp_num,
-        flag_key=flag_key,
-        flag_values=flag_values,
-        **kwargs)
-
-    by_treatment_scores_first_flag_value_p_nuc = dict()
-    by_treatment_scores_second_flag_value_p_nuc = dict()
-    by_treatment_scores_first_flag_value_p_prop = dict()
-    by_treatment_scores_second_flag_value_p_prop = dict()
-
-    by_treatment_distance_metric_score_p_nuc = dict()
-    by_treatment_distance_metric_score_p_prop = dict()
-
-    for single_exp_idx, treatment_name in enumerate(all_treatment_types_list[0]):
-        # by_treatment_rmse_score[treatment_name] = by_treatment_rmse_score.get(treatment_name) + \
-        #                                           all_global_p_nuc_p_prop_tuples_list[0][single_exp_idx]
-        by_treatment_scores_first_flag_value_p_nuc[treatment_name] = \
-            by_treatment_scores_first_flag_value_p_nuc.get(treatment_name, []) + \
-            [all_global_p_nuc_p_prop_tuples_list[0][0][single_exp_idx]]
-        by_treatment_scores_second_flag_value_p_nuc[treatment_name] = \
-            by_treatment_scores_second_flag_value_p_nuc.get(treatment_name, []) + \
-            [all_global_p_nuc_p_prop_tuples_list[1][0][single_exp_idx]]
-
-        by_treatment_scores_first_flag_value_p_prop[treatment_name] = \
-            by_treatment_scores_first_flag_value_p_prop.get(treatment_name, []) + \
-            [all_global_p_nuc_p_prop_tuples_list[0][1][single_exp_idx]]
-        by_treatment_scores_second_flag_value_p_prop[treatment_name] = \
-            by_treatment_scores_second_flag_value_p_prop.get(treatment_name, []) + \
-            [all_global_p_nuc_p_prop_tuples_list[1][1][single_exp_idx]]
-
-    for treatment_name in by_treatment_scores_first_flag_value_p_nuc.keys():
-        metric_to_use = kwargs.get('distance_metric', 'rmse')
-        # todo: change metric to kl-divergence
-        by_treatment_distance_metric_score_p_nuc[treatment_name] = \
-            calc_distance_metric_between_signals(y_true=by_treatment_scores_first_flag_value_p_nuc[treatment_name],
-                                                 y_pred=by_treatment_scores_second_flag_value_p_nuc[treatment_name],
-                                                 metric=metric_to_use)
-        by_treatment_distance_metric_score_p_prop[treatment_name] = \
-            calc_distance_metric_between_signals(y_true=by_treatment_scores_first_flag_value_p_prop[treatment_name],
-                                                 y_pred=by_treatment_scores_second_flag_value_p_prop[treatment_name],
-                                                 metric=metric_to_use)
-    if kwargs.get('visualize_flag', True):
-        # todo: change visualization to a a more informative plot, focus on specific treatments.
-        visualize_rmse_of_altering_flag_values_by_treatment(
-            p_nuc_rmse_by_treatment=by_treatment_distance_metric_score_p_nuc,
-            p_prop_rmse_by_treatment=by_treatment_distance_metric_score_p_prop,
-            flag_name=flag_key[:18])
-
-    return by_treatment_distance_metric_score_p_nuc, by_treatment_distance_metric_score_p_prop
 
 
 def calc_and_visualize_all_experiments_csvs_in_dir_with_altering_flag_values(dir_path: str = None,
@@ -655,8 +668,7 @@ def calc_and_visualize_all_experiments_csvs_in_dir_with_altering_flag_values(dir
     all_treatment_types_list = calc_all_experiments_csvs_in_dir_with_altering_flag_values(dir_path=dir_path,
                                                                                           limit_exp_num=limit_exp_num,
                                                                                           flag_key=flag_key,
-                                                                                          flag_values=flag_values,
-                                                                                          **kwargs)
+                                                                                          flag_values=flag_values)
 
     visualize_endpoint_readouts_by_treatment_to_varying_calculation_flags(
         xy1_readout_tuple=all_global_p_nuc_p_prop_tuples_list[0],
@@ -665,6 +677,256 @@ def calc_and_visualize_all_experiments_csvs_in_dir_with_altering_flag_values(dir
         treatment_per_readout2=all_treatment_types_list[1],
         first_flag_type_name_and_value=f'{flag_key}={flag_values[0]}',
         second_flag_type_name_and_value=f'{flag_key}={flag_values[1]}')
+
+
+def calc_slopes_and_probabilities_per_unit_of_time_single_experiment(exp_full_path: str,
+                                                                     exp_temporal_resolution: int,
+                                                                     unit_of_time_min: int = 60,
+                                                                     consider_majority_of_death_only: bool = True,
+                                                                     **kwargs) -> Tuple[np.array,
+                                                                             np.array,
+                                                                             np.array,
+                                                                             Tuple[float, float],
+                                                                             Tuple[float, float],
+                                                                             Tuple[float, float]]:
+    """
+    calculates the p(nuc), p(prop) and accumulated death probabilities for a given time
+    interval (in minutes) specified by 'unit_of_time_min' argument.
+    If only the majority of death is of interest (consider only a defined portion of the death process),
+    set the 'consider_majority_of_death_only' argument to True (default). The lower and upper bounds
+    of the majority of death is in terms of overall cell death fraction (found in the accumulated death variable).
+    The values of the bounds is set from the kwargs argument (lower_bound_percentile, upper_bound_percentile attributes)
+    and their default values are set in the global_variables script.
+    the function retrieves the mean probability for each unit of time (for each probability)
+    and the slope and intercept of the probability signal (of the values before the unit of time partitioning).
+
+    :param exp_full_path: str, the experiments csv file full path.
+    :param exp_temporal_resolution: int, the temporal resolution of the experiment.
+    :param unit_of_time_min: int, the unit of time to calculate the mean probabilities for. default 60)
+    :param consider_majority_of_death_only: boolean, whether to use the entire death
+            probabilities signals or just a subset
+    :param kwargs: possible kwargs -
+        'only_recent_death_flag_for_neighbors_calc': , dafault =
+        'lower_bound_percentile': , dafault =
+        'upper_bound_percentile': , dafault =
+    :return:
+    """
+    # get all kwargs into local variables
+    only_recent_death_flag_for_neighbors_calc = kwargs.get('only_recent_death_flag_for_neighbors_calc',
+                                                           RECENT_DEATH_ONLY_FLAG)
+    lower_bound_death_percentile = kwargs.get('lower_bound_percentile', LOWER_DEATH_PERCENTILE_BOUNDARY)
+    upper_bound_death_percentile = kwargs.get('upper_bound_percentile', UPPER_DEATH_PERCENTILE_BOUNDARY)
+
+    # calc experiment's readouts
+    p_nuc_by_time, p_prop_by_time, p_nuc_global, p_prop_global, \
+    all_frames_nucleators_mask, all_frames_propagators_mask, \
+    accumulated_fraction_of_death_by_time = \
+        calc_single_experiment_temporal_p_nuc_and_p_prop_and_endpoint_readouts_explicit_temporal_resolution(
+            single_exp_full_path=exp_full_path,
+            only_recent_death_flag_for_neighbors_calc=only_recent_death_flag_for_neighbors_calc)
+
+    # if considering only the majority of death, removes all probabilities that are not a part of the majority
+    # of the death process (leaves only data starting from the point in time where the lower bound is found, and ending
+    # in the point in time where the upper bound is met).
+    if consider_majority_of_death_only:
+        tenth_percentile_idx = np.where(accumulated_fraction_of_death_by_time >=
+                                        lower_bound_death_percentile)[0][0]
+        nineteenth_percentile_idx = np.where(accumulated_fraction_of_death_by_time >
+                                             upper_bound_death_percentile)[0][0]
+        p_nuc_by_time = p_nuc_by_time[tenth_percentile_idx: nineteenth_percentile_idx]
+        p_prop_by_time = p_prop_by_time[tenth_percentile_idx: nineteenth_percentile_idx]
+        accumulated_fraction_of_death_by_time = \
+            accumulated_fraction_of_death_by_time[tenth_percentile_idx: nineteenth_percentile_idx]
+
+    # calculate the slope and intercept of all probabilities
+    nuc_slope, nuc_intercept = calc_signal_slope_and_intercept(x=None, y=p_nuc_by_time)
+    prop_slope, prop_intercept = calc_signal_slope_and_intercept(x=None, y=p_prop_by_time)
+    accumulated_slope, accumulated_intercept = calc_signal_slope_and_intercept(x=None,
+                                                                               y=accumulated_fraction_of_death_by_time)
+
+    # collect probabilities per unit of time
+    num_frames_within_time_unit = int(unit_of_time_min / exp_temporal_resolution)
+
+    if num_frames_within_time_unit < 1:
+        Warning(ValueError('unit_of_time_min can not be smaller the'
+                           ' experiments temporal resolution! returning empty values!'))
+        return np.array([]), np.array([]), np.array([]), \
+               (float('inf'), float('inf')), \
+               (float('inf'), float('inf')), \
+               (float('inf'), float('inf'))
+
+    num_of_units_of_time_in_exp = int(len(p_nuc_by_time) / num_frames_within_time_unit)
+    # in case there are too few timeframes
+    num_of_units_of_time_in_exp = 1 if num_of_units_of_time_in_exp < 1 else num_of_units_of_time_in_exp
+    # collect pairs of indices for each time unit
+    indices_to_collect = list()
+    for idx in range(num_of_units_of_time_in_exp):
+        indices_to_collect.append((idx * num_frames_within_time_unit, (idx + 1) * num_frames_within_time_unit))
+
+    if (idx + 1) * num_frames_within_time_unit < len(p_nuc_by_time):
+        indices_to_collect.append(((idx + 1) * num_frames_within_time_unit, len(p_nuc_by_time)))
+
+    mean_p_nuc_per_unit_of_time = list()
+    mean_p_prop_per_unit_of_time = list()
+    mean_p_accumulated_death_per_unit_of_time = list()
+
+    for indices in indices_to_collect:
+        st_idx, end_idx = indices
+        mean_p_nuc_per_unit_of_time.append(p_nuc_by_time[st_idx: end_idx].mean())
+        mean_p_prop_per_unit_of_time.append(p_prop_by_time[st_idx: end_idx].mean())
+        mean_p_accumulated_death_per_unit_of_time.append(accumulated_fraction_of_death_by_time[st_idx: end_idx].mean())
+
+    mean_p_nuc_per_unit_of_time = np.array(mean_p_nuc_per_unit_of_time)
+    mean_p_prop_per_unit_of_time = np.array(mean_p_prop_per_unit_of_time)
+    mean_p_accumulated_death_per_unit_of_time = np.array(mean_p_accumulated_death_per_unit_of_time)
+
+    return mean_p_nuc_per_unit_of_time, \
+           mean_p_prop_per_unit_of_time, \
+           mean_p_accumulated_death_per_unit_of_time, \
+           (nuc_slope, nuc_intercept), \
+           (prop_slope, prop_intercept), \
+           (accumulated_slope, accumulated_intercept)
+
+
+def calc_slopes_and_probabilities_per_unit_of_time_entire_dir(dir_full_path: str,
+                                                              treatments_to_include: Union[List[str], str],
+                                                              limit_exp_num: int = float('inf'),
+                                                              unit_of_time_min: int = 60,
+                                                              consider_majority_of_death_only: bool = True,
+                                                              **kwargs
+                                                              ) -> Tuple[dict, dict, dict]:
+    compressed_flag = False
+    if 'compressed' in dir_full_path.lower():
+        compressed_flag = True
+
+    meta_data_file_full_path = os.sep.join(dir_full_path.split(os.sep)[:-1] + ['ExperimentsMetaData.csv'])
+
+    # get all kwargs into local variables
+    visualize_flag = kwargs.get('visualize_flag', True)
+    use_log = kwargs.get('use_log', USE_LOG)
+    only_recent_death_flag_for_neighbors_calc = kwargs.get('only_recent_death_flag_for_neighbors_calc',
+                                                           RECENT_DEATH_ONLY_FLAG)
+
+    lower_bound_death_percentile = kwargs.get('lower_bound_percentile', LOWER_DEATH_PERCENTILE_BOUNDARY)
+    upper_bound_death_percentile = kwargs.get('upper_bound_percentile', UPPER_DEATH_PERCENTILE_BOUNDARY)
+
+
+    # get all paths to the experiments' files.
+    all_files_full_paths, all_files_only_exp_names = get_all_paths_csv_files_in_dir(dir_path=dir_full_path)
+    total_exps = len(all_files_only_exp_names)
+
+    #
+    all_nuc_slopes, all_nuc_intercepts = list(), list()
+    all_prop_slopes, all_prop_intercepts = list(), list()
+    all_accumulated_death_slopes, all_accumulated_death_intercepts = list(), list()
+
+    treatment_per_readout = list()
+
+    exps_mean_per_time_unit_by_treatment = {}
+
+    for exp_idx, single_exp_full_path in enumerate(all_files_full_paths):
+        if limit_exp_num < exp_idx + 1:
+            break
+
+        exp_name = all_files_only_exp_names[exp_idx]
+
+        exp_treatment, explicit_temporal_resolution = \
+            get_exp_treatment_type_and_temporal_resolution(exp_file_name=single_exp_full_path.split(os.sep)[-1],
+                                                           meta_data_file_full_path=meta_data_file_full_path,
+                                                           compressed_flag=compressed_flag)
+        # skip un-wanted treatments
+        if treatments_to_include != 'all' and exp_treatment.lower() not in treatments_to_include:
+            continue
+
+        print(f'analyzing exp {exp_name} | {exp_idx + 1}/{total_exps}')
+
+        exp_mean_p_nuc_per_unit_of_time, \
+        exp_mean_p_prop_per_unit_of_time, \
+        exp_mean_p_accumulated_death_per_unit_of_time, \
+        exp_nuc_slope_and_intercept, \
+        exp_prop_slope_and_intercept, \
+        exp_accumulated_death_slope_and_intercept, \
+            = calc_slopes_and_probabilities_per_unit_of_time_single_experiment(exp_full_path=single_exp_full_path,
+                                                                               exp_temporal_resolution=explicit_temporal_resolution,
+                                                                               unit_of_time_min=unit_of_time_min,
+                                                                               consider_majority_of_death_only=consider_majority_of_death_only,
+                                                                               **kwargs)
+        # aggregating mean probabilities by treatment name
+        exps_mean_per_time_unit_by_treatment[exp_treatment] = \
+            exps_mean_per_time_unit_by_treatment.get(exp_treatment, []) + \
+            [[exp_mean_p_nuc_per_unit_of_time, exp_mean_p_prop_per_unit_of_time]]
+
+        # un-packing slope and intercept
+        exp_nuc_slope, exp_nuc_intercept = exp_nuc_slope_and_intercept
+        exp_prop_slope, exp_prop_intercept = exp_prop_slope_and_intercept
+        exp_accumulated_death_slope, exp_accumulated_death_intercept = exp_accumulated_death_slope_and_intercept
+
+        all_nuc_slopes.append(exp_nuc_slope)
+        all_nuc_intercepts.append(exp_nuc_intercept)
+
+        all_prop_slopes.append(exp_prop_slope)
+        all_prop_intercepts.append(exp_prop_intercept)
+
+        all_accumulated_death_slopes.append(exp_accumulated_death_slope)
+        all_accumulated_death_intercepts.append(exp_accumulated_death_intercept)
+
+        treatment_per_readout.append(exp_treatment)
+
+    if visualize_flag:
+        # plotting the slopes and intercepts of all_experiments
+        kwargs['set_y_lim'] = False
+        if only_recent_death_flag_for_neighbors_calc:
+            path_to_save_figure_dir_only = os.sep.join(
+                        os.getcwd().split(os.sep)[:-1] + ['Results', 'MeasurementsEndpointReadoutsPlots',
+                                                          'Only recent death considered for neighbors results',
+                                                          'Global_P_Nuc_VS_P_Prop'])
+        else:
+            path_to_save_figure_dir_only = os.sep.join(
+                os.getcwd().split(os.sep)[:-1] + ['Results', 'MeasurementsEndpointReadoutsPlots',
+                                                  'Global_P_Nuc_VS_P_Prop'])
+        path_to_save_figure = os.sep.join([path_to_save_figure_dir_only, 'nuc_prop_slopes_about_treatment'])
+        # slopes:
+        visualize_endpoint_readouts_by_treatment_about_readouts(x_readout=all_nuc_slopes,
+                                                                y_readout=all_prop_slopes,
+                                                                treatment_per_readout=treatment_per_readout,
+                                                                x_label='P(Nuc) Slope',
+                                                                y_label='P(Prop) Slope',
+                                                                use_log=use_log,
+                                                                plot_about_treatment=True,
+                                                                full_path_to_save_fig=path_to_save_figure,
+                                                                **kwargs)
+        path_to_save_figure = os.sep.join([path_to_save_figure_dir_only, 'nuc_prop_intercepts_about_treatment'])
+        # intercepts:
+        visualize_endpoint_readouts_by_treatment_about_readouts(x_readout=all_nuc_intercepts,
+                                                                y_readout=all_prop_intercepts,
+                                                                treatment_per_readout=treatment_per_readout,
+                                                                x_label='P(Nuc) Intercepts',
+                                                                y_label='P(Prop) Intercepts',
+                                                                use_log=use_log,
+                                                                plot_about_treatment=True,
+                                                                full_path_to_save_fig=path_to_save_figure,
+                                                                **kwargs)
+
+        # plotting the mean probability per unit of time (? todo: need to calculate and aggregate means first)
+        for treatment_name in np.unique(np.array(treatment_per_readout)):
+            readouts = exps_mean_per_time_unit_by_treatment[treatment_name]
+            plot_temporal_readout_for_entire_treatment(readouts=readouts,
+                                                       labels=[f'P(Nuc) per {unit_of_time_min} min', f'P(Prop) per {unit_of_time_min} min'],
+                                                       treatment=treatment_name,
+                                                       unit_of_time=unit_of_time_min)
+
+        # visualize_endpoint_readouts_by_treatment_about_readouts(plot_about_treatment=True)
+
+    nucleation_data = {'slopes': all_nuc_slopes,
+                       'intercepts': all_nuc_intercepts}
+
+    propagation_data = {'slopes': all_prop_slopes,
+                       'intercepts': all_prop_intercepts}
+
+    accumulated_death_data = {'slopes': all_accumulated_death_slopes,
+                       'intercepts': all_accumulated_death_intercepts}
+
+    return nucleation_data, propagation_data, accumulated_death_data
 
 
 if __name__ == '__main__':
@@ -690,11 +952,11 @@ if __name__ == '__main__':
     #     os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV',
     #                                       'CompressedTime_XYT_CSV'])))
     #
-    #
-    calc_and_visualize_all_experiments_csvs_in_dir(limit_exp_num=3,  # float('inf'),
-                                                   dir_path=os.sep.join(
-                                                       os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV',
-                                                                                         'OriginalTimeMinutesData']))
+    # MULTIPLE EXPERIMENTS
+    # calc_and_visualize_all_experiments_csvs_in_dir(limit_exp_num=float('inf'),
+    #                                                dir_path=os.sep.join(
+    #                                                    os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV',
+    #                                                                                      'OriginalTimeMinutesData']))
 
     # # single experiment testing
     # path = '..\\Data\\Experiments_XYT_CSV\\CompressedTime_XYT_CSV\\20160909_b16f10_aMSH_xy37.csv'
@@ -706,4 +968,47 @@ if __name__ == '__main__':
     #
     # plot_measurements_by_time(p_nuc_by_time, p_prop_by_time, accumulated_fraction_of_death_by_time,
     #                           temporal_resolution=15, exp_name='20180620_HAP1_erastin_xy1', exp_treatment='test_treat')
+
+    # plot kl-divergence between recent death only flags endpoint readouts
+    # kwargs = dict()
+    # kwargs['distance_metric'] = 'kl_divergence'
+    # kwargs['visualize_flag'] = True
+    # kwargs['visualize_specific_treatments'] = ['tnf', 'erastin', 'trail']
+    # dir_path = os.sep.join(
+    #     os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV',
+    #                                  'OriginalTimeMinutesData'])
+    # by_treatment_distance_metric_score_p_nuc, by_treatment_distance_metric_score_p_prop = \
+    #     calc_distance_metric_between_experiments_results_of_altering_flag_values(
+    #     dir_path=dir_path, **kwargs)
+
+    # single simulation xyt results testing
+    # path = '..\\Data\\Simulations_XYT_CSV\\apoptosis_attempts\\xyt_ferroptosis_attempt.csv'
+    # temporal_resolution = 15
+    # p_nuc_by_time, p_prop_by_time, p_nuc_global, p_prop_global, \
+    # all_frames_nucleators_mask, all_frames_propagators_mask,\
+    #     accumulated_fraction_of_death_by_time = \
+    #     calc_single_experiment_temporal_p_nuc_and_p_prop_and_endpoint_readouts_provided_temporal_resolution(
+    #         single_exp_full_path=path, temporal_resolution=temporal_resolution)
+    #
+    # visualize_cell_death_in_time(xyt_full_path=path, nucleators_mask=all_frames_nucleators_mask, exp_treatment='just_treatment', exp_name='just name')
+    #
+    # plot_measurements_by_time(p_nuc_by_time, p_prop_by_time, accumulated_fraction_of_death_by_time,
+    #                           temporal_resolution=temporal_resolution, exp_name='simulation_test',
+    #                           exp_treatment='simulation')
+
+    ## single experiment probabilities per unit of time testing
+    # exp_path = 'C:\\Users\\User\\PycharmProjects\\CellDeathQuantification\\Data\\Experiments_XYT_CSV\\OriginalTimeMinutesData\\20160820_10A_FB_xy13.csv'
+    #
+    # calc_slopes_and_probabilities_per_unit_of_time_single_experiment(exp_full_path=exp_path,
+    #                                                                      exp_temporal_resolution=10,
+    #                                                                      exp_treatment='C dots',
+    #                                                                      unit_of_time_min=60,
+    #                                                                      consider_majority_of_death_only=True)
+
+    # multiple experiments slopes and probabilities per unit of time testing
+    dir_path = os.sep.join(os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV', 'OriginalTimeMinutesData'])
+    calc_slopes_and_probabilities_per_unit_of_time_entire_dir(dir_full_path=dir_path,
+                                                              treatments_to_include='all',
+                                                              unit_of_time_min=60,
+                                                              consider_majority_of_death_only=True)
     pass

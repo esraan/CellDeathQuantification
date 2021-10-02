@@ -1,9 +1,10 @@
 import os
 from typing import *
-
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
+from matplotlib import cm
+
 from NucleatorsProbabilities import *
 from utils import *
 from global_parameters import *
@@ -47,7 +48,8 @@ def calc_probability_to_die_as_a_neighbor_at_given_level(cells_times_of_deaths: 
 def calc_pnuc_at_varying_distances_of_neighbors(exp_filename,
                                                 exp_main_directory_path,
                                                 file_details_full_path,
-                                                path_to_save_fig_no_type=''):
+                                                path_to_save_fig_no_type='',
+                                                **kwargs):
     """
     plots p(nuc) at two different distances from dead cells for a single experiment
     :param exp_filename: the experiment XYT file name (including .csv)
@@ -70,6 +72,7 @@ def calc_pnuc_at_varying_distances_of_neighbors(exp_filename,
     exp_treatment_type = exp_details_df[exp_details_df['File Name'] == exp_filename]['Treatment'].values[0]
     jump_interval = exp_temporal_resolution
     # time_window_size = WINDOW_SIZE * jump_interval
+    cmap = mpl.cm.__builtin_cmaps[13]
 
     # get neighbors list of all cells (topological by Voronoi)
     neighbors_list, neighbors_list2, neighbors_list3 = get_cells_neighbors(XY=XY,
@@ -87,31 +90,46 @@ def calc_pnuc_at_varying_distances_of_neighbors(exp_filename,
                                                              cells_neighbors_lists=neighbors_list3))
     org_path = path_to_save_fig_no_type
     path_to_save_fig_no_type = org_path + '_2on3'
+
+    # get visualization argument
+    probabilities_marker_size = kwargs.get('probabilities_marker_size', 300)
+
     scatter_with_linear_regression_line(nuc_probas_calculator_lvl_2, nuc_probas_calculator_lvl_3,
                                         x_label='Nucleation probability at level 2 neighborhood',
                                         y_label='Nucleation probability at level 3 neighborhood',
                                         title=f'experiment treatment: {exp_treatment_type}',
-                                        path_to_save_fig=path_to_save_fig_no_type)
+                                        path_to_save_fig=path_to_save_fig_no_type,
+                                        colors=np.unique(die_times),
+                                        color_map=cmap,
+                                        marker_size=probabilities_marker_size)
 
     path_to_save_fig_no_type = org_path + '_1on2'
     scatter_with_linear_regression_line(nuc_probas_calculator_lvl_1, nuc_probas_calculator_lvl_2,
                                         x_label='Nucleation probability at level 1 neighborhood',
                                         y_label='Nucleation probability at level 2 neighborhood',
                                         title=f'experiment treatment: {exp_treatment_type}',
-                                        path_to_save_fig=path_to_save_fig_no_type)
+                                        path_to_save_fig=path_to_save_fig_no_type,
+                                        colors=np.unique(die_times),
+                                        color_map=cmap,
+                                        marker_size=probabilities_marker_size)
 
     path_to_save_fig_no_type = org_path + '_1on3'
     scatter_with_linear_regression_line(nuc_probas_calculator_lvl_1, nuc_probas_calculator_lvl_3,
                                         x_label='Nucleation probability at level 1 neighborhood',
                                         y_label='Nucleation probability at level 3 neighborhood',
                                         title=f'experiment treatment: {exp_treatment_type}',
-                                        path_to_save_fig=path_to_save_fig_no_type)
+                                        path_to_save_fig=path_to_save_fig_no_type,
+                                        colors=np.unique(die_times),
+                                        color_map=cmap,
+                                        marker_size=probabilities_marker_size)
 
 
 if __name__ == '__main__':
     exp_main_dir_path = '../Data/Experiments_XYT_CSV/OriginalTimeMinutesData'
     exp_meta_data_full_path = '../Data/Experiments_XYT_CSV/ExperimentsMetaData.csv'
-    for filename in filter(lambda x: x.endswith('.csv'), os.listdir(exp_main_dir_path)):
+    for file_idx, filename in enumerate(filter(lambda x: x.endswith('.csv'), os.listdir(exp_main_dir_path))):
+        print(f'file :{filename}|{file_idx+1}/'
+              f'{len(list(filter(lambda x: x.endswith(".csv"), os.listdir(exp_main_dir_path))))}')
         path_to_save_fig = os.sep.join(
             ['../Results', 'NucleationProbabilitiesForVaryingLevelsOfNeighborhoods', filename.replace('.csv', '')])
         calc_pnuc_at_varying_distances_of_neighbors(exp_filename=filename,
@@ -119,6 +137,7 @@ if __name__ == '__main__':
                                                     file_details_full_path=exp_meta_data_full_path,
                                                     path_to_save_fig_no_type=path_to_save_fig)
 
+    # SINGLE EXPERIMENT TESTING
     # calc_pnuc_at_varying_distances_of_neighbors(exp_filename='20180620_HAP1_erastin_xy7.csv',
     #                                             exp_main_directory_path=exp_main_dir_path,
     #                                             file_details_full_path=exp_meta_data_full_path)

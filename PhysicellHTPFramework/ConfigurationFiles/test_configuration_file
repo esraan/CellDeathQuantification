@@ -1,0 +1,17 @@
+{
+    'microenvironment_setup':[
+        'global_pressure': [
+        'physical_parameter_set':[
+        'diffusion_coefficient':,
+        'decay_rate':],
+        'initial_condition':,
+        'Dirichlet_boundary_condition':],
+        'local_pressure': [
+        'physical_parameter_set':[
+        'diffusion_coefficient':,
+        'decay_rate':],
+        'initial_condition':,
+        'Dirichlet_boundary_condition':]
+    ],
+    '':
+}

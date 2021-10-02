@@ -136,7 +136,7 @@ def get_marker_per_treatment_list(all_treatments: np.array) -> Tuple[List, List,
         rand_marker_idx = np.random.randint(0, len(all_possible_markers))
         # rand_marker_key = list(all_possible_markers.keys())[rand_marker_idx]
         treatment_to_marker_dict[treatment] = all_possible_markers[rand_marker_idx]
-        treatment_to_color_dict[treatment] = (random.random(), random.random(),random.random(), 1)
+        treatment_to_color_dict[treatment] = (random.random(), random.random(), random.random(), 1)
         all_possible_markers.pop(rand_marker_idx)
 
     markers_list = list()
@@ -167,7 +167,8 @@ def get_all_paths_csv_files_in_dir(dir_path: str) -> Tuple[List, List]:
     """
     if dir_path is None:
         raise ValueError('dir path cant be none')
-    full_paths = list(map(lambda x: os.sep.join([dir_path, x]), filter(lambda x: x.endswith('.csv'),
+    full_paths = list(map(lambda x: os.sep.join([dir_path, x]), filter(lambda x: x.endswith('.csv') and
+                                                                                 'ds_store' not in x.lower(),
                                                                        os.listdir(dir_path))))
     only_exp_names = list(map(lambda x: x.replace('.csv', ''), filter(lambda x: x.endswith('.csv'),
                                                                       os.listdir(dir_path))))
@@ -357,7 +358,8 @@ def get_cells_not_neighboring_dead_cells(dead_cells_mask, neighbors, neighbors_l
             curr_neighbors = neighbors[cell_idx]
             for neighbor_idx in curr_neighbors:
                 if xy is not None:
-                    dist = get_euclidean_distance_between_cells_in_pixels(cell1_xy=xy[cell_idx], cell2_xy=xy[neighbor_idx])
+                    dist = get_euclidean_distance_between_cells_in_pixels(cell1_xy=xy[cell_idx],
+                                                                          cell2_xy=xy[neighbor_idx])
                     around_dead_cells[neighbor_idx] = (True) * (dist < threshold)
 
     # get complementary & alive cells that are not near dead cells
@@ -408,7 +410,7 @@ def calc_distance_metric_between_signals(y_true: np.array, y_pred: np.array, met
         return euc_dis(y_true, y_pred).mean()
 
 
-def calc_signal_slope(x: np.array = None, y: np.array = None) -> Tuple[float, float]:
+def calc_signal_slope_and_intercept(x: np.array = None, y: np.array = None) -> Tuple[float, float]:
     """
     calculates a signal slope and intercept using scipy linegress model.
     if x is not given, this function generates an array of consequential indices with an interval of 1 and
@@ -424,3 +426,7 @@ def calc_signal_slope(x: np.array = None, y: np.array = None) -> Tuple[float, fl
 
     lr_object = linregress(x, y)
     return lr_object.slope, lr_object.intercept
+
+
+def clean_string_from_bad_chars(treatment_name: str, replacement='_') -> str:
+    return treatment_name.replace('\\', replacement).replace('/', replacement)

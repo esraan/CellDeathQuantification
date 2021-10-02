@@ -169,12 +169,15 @@ def visualize_endpoint_readouts_by_treatment_to_varying_calculation_flags(xy1_re
 def visualize_endpoint_readouts_by_treatment_about_readouts(x_readout: np.array,
                                                             y_readout: np.array,
                                                             treatment_per_readout: np.array,
+                                                            full_dir_path_to_save_fig: str = None,
                                                             full_path_to_save_fig: str = None,
                                                             x_label: str = 'Fraction of Nucleators',
                                                             y_label: str = 'Fraction of Propagators',
                                                             use_log: bool = False,
                                                             plot_about_treatment: bool = False,
                                                             **kwargs):
+    set_y_lim = kwargs.get('set_y_lim', True)
+    recent_death_flag = kwargs.get('only_recent_death_flag_for_neighbors_calc', RECENT_DEATH_ONLY_FLAG)
     if use_log:
         x_readout = np.log10(x_readout)
         y_readout = np.log10(y_readout)
@@ -238,22 +241,22 @@ def visualize_endpoint_readouts_by_treatment_about_readouts(x_readout: np.array,
         plt.setp(axis[1].xaxis.get_majorticklabels(), ha="left", rotation_mode="anchor")
 
         if not use_log:
-            if RECENT_DEATH_ONLY_FLAG:
+            if recent_death_flag:
                 y_tick_limits_x_label = [0.15, 0.6]
                 y_tick_limits_y_label = [0.35, 0.9]
             else:
                 y_tick_limits_x_label = [0.1, 0.3]
                 y_tick_limits_y_label = [0.7, 0.95]
         else:
-            if RECENT_DEATH_ONLY_FLAG:
+            if recent_death_flag:
                 y_tick_limits_x_label = [-0.8, -0.2]
                 y_tick_limits_y_label = [-0.4, 0]
             else:
                 y_tick_limits_x_label = [-1, -0.5]
                 y_tick_limits_y_label = [-0.2, 0]
-
-        axis[0].set_ylim(y_tick_limits_x_label)
-        axis[1].set_ylim(y_tick_limits_y_label)
+        if set_y_lim:
+            axis[0].set_ylim(y_tick_limits_x_label)
+            axis[1].set_ylim(y_tick_limits_y_label)
 
     else:
         ax.grid('on')
@@ -266,23 +269,23 @@ def visualize_endpoint_readouts_by_treatment_about_readouts(x_readout: np.array,
         else:
             x_tick_limits = [-1, 0]
             y_tick_limits = [-.4, 0]
-
-        ax.set_xlim(x_tick_limits)
-        ax.set_ylim(y_tick_limits)
+        if set_y_lim:
+            ax.set_xlim(x_tick_limits)
+            ax.set_ylim(y_tick_limits)
 
     plt.tight_layout()
 
     if SHOWFIG:
         plt.show()
     elif SAVEFIG:
-        if RECENT_DEATH_ONLY_FLAG:
-            path_for_plot_dir = full_path_to_save_fig if full_path_to_save_fig is not None else \
+        if recent_death_flag:
+            path_for_plot_dir = full_dir_path_to_save_fig if full_dir_path_to_save_fig is not None else \
                 os.sep.join(
                     os.getcwd().split(os.sep)[:-1] + ['Results', 'MeasurementsEndpointReadoutsPlots',
                                                       'Only recent death considered for neighbors results',
                                                       'Global_P_Nuc_VS_P_Prop'])
         else:
-            path_for_plot_dir = full_path_to_save_fig if full_path_to_save_fig is not None else os.sep.join(
+            path_for_plot_dir = full_dir_path_to_save_fig if full_dir_path_to_save_fig is not None else os.sep.join(
                 os.getcwd().split(os.sep)[:-1] + ['Results', 'MeasurementsEndpointReadoutsPlots',
                                                   'Global_P_Nuc_VS_P_Prop'])
         if not os.path.isdir(path_for_plot_dir):
@@ -293,10 +296,13 @@ def visualize_endpoint_readouts_by_treatment_about_readouts(x_readout: np.array,
             path_for_plot = os.sep.join([path_for_plot_dir, f'LOG_global_p_nuc_vs_p_prop_all_exps{plot_about_time_path_addition}'])
         else:
             path_for_plot = os.sep.join([path_for_plot_dir, f'global_p_nuc_vs_p_prop_all_exps{plot_about_time_path_addition}'])
+        path_for_plot = path_for_plot if full_path_to_save_fig is None else full_path_to_save_fig
         plt.savefig(path_for_plot + '.png', dpi=200)  # , bbox_extra_artists=[lgd], bbox_inches='tight')
         plt.savefig(path_for_plot + '.eps', dpi=200)  # , bbox_extra_artists=[lgd], bbox_inches='tight')
 
     plt.close(fig)
+
+
 def visualize_cell_death_in_time(xyt_df: pd.DataFrame = None,
                                  xyt_full_path: str = None,
                                  nucleators_mask: np.array = None,
@@ -322,7 +328,7 @@ def visualize_cell_death_in_time(xyt_df: pd.DataFrame = None,
         raise ValueError('must provide exp treatment and name!')
 
     # clean exp_name and treatment from bad characters
-    exp_name, exp_treatment = exp_name.replace('/', ''), exp_treatment.replace('/', '')
+    exp_name, exp_treatment = clean_string_from_bad_chars(exp_treatment, replacement=''), clean_string_from_bad_chars(exp_treatment)
 
     data = xyt_df if xyt_df is not None else pd.read_csv(xyt_full_path)
     death_times = data['death_time'].values
@@ -368,6 +374,8 @@ def visualize_cell_death_in_time(xyt_df: pd.DataFrame = None,
 
         path_for_plot = os.sep.join([path_for_plot_dir, f'{exp_name}.png'])
         plt.savefig(path_for_plot, dpi=200)
+        path_for_plot = os.sep.join([path_for_plot_dir, f'{exp_name}.eps'])
+        plt.savefig(path_for_plot, dpi=200)
 
     plt.close(fig)
 
@@ -392,7 +400,7 @@ def plot_measurements_by_time(p_nuc_by_time: np.array,
     plt.clf()
 
     # clean exp_name and treatment from bad characters
-    exp_name, exp_treatment = exp_name.replace('/', ''), exp_treatment.replace('/', '')
+    exp_name, exp_treatment = clean_string_from_bad_chars(exp_treatment, replacement=''), clean_string_from_bad_chars(exp_treatment)
 
     max_time = len(p_nuc_by_time) * temporal_resolution
     time_axis = np.arange(0, max_time, temporal_resolution)
@@ -453,7 +461,7 @@ def plot_measurements_by_time(p_nuc_by_time: np.array,
 
 def scatter_with_linear_regression_line(x: np.array, y: np.array, x_label: str, y_label: str, title: str,
                                         path_to_save_fig: str, plot_linear_regression: bool = False,
-                                        color_map: dict = None, colors: np.array = None):
+                                        color_map: dict = None, colors: np.array = None, **kwargs):
     """
 
     :param colors:
@@ -469,12 +477,13 @@ def scatter_with_linear_regression_line(x: np.array, y: np.array, x_label: str, 
     """
     plt.clf()
 
+    marker_size = kwargs.get('marker_size', 300)
     fig, ax = plt.subplots()
     # plot probabilities for each level of neighborhoods
     if color_map is None or colors is None:
-        ax.scatter(x, y, s=50, color=(0, 1, 0, 0.8), marker='*')
+        ax.scatter(x, y, s=marker_size, color=(0, 1, 0, 0.8), marker='*')
     else:
-        ax.scatter(x, y, s=50, marker='*', c=colors, cmap=color_map)
+        ax.scatter(x, y, s=marker_size, marker='*', c=colors, cmap=color_map)
 
     if plot_linear_regression:
         # plot linear regression line
@@ -503,25 +512,6 @@ def scatter_with_linear_regression_line(x: np.array, y: np.array, x_label: str, 
     elif SHOWFIG:
         plt.show()
     plt.close(fig=fig)
-
-
-if __name__ == '__main__':
-    # visualize_cell_death_in_time(xyt_path='Data/Experiments_XYT_CSV/20180620_HAP1_erastin_xy6.csv',
-    #                              to_save_path=os.sep.join(['Results/CellDeathVisualizations', '20180620_HAP1_erastin_xy6_cell_death.png']))
-    #
-    # visualize_cell_death_in_time(xyt_path='Data/Experiments_XYT_CSV/20181227_MCF10A_SKT_xy1.csv',
-    #                              to_save_path=os.sep.join(
-    #                                  ['Results/CellDeathVisualizations', '20181227_MCF10A_SKT_xy1_cell_death.png']))
-    for path in get_all_paths_csv_files_in_dir('Data/Simulations_XYT_CSV/erstin/0.0005'):
-        visualize_cell_death_in_time(xyt_full_path=path,
-                                     full_path_to_save_fig=os.sep.join(
-                                         ['Results/CellDeathVisualizations',
-                                          path.split(os.sep)[-1].replace('.csv', '_erastin_cell_death.png')]))
-    for path in get_all_paths_csv_files_in_dir('Data/Simulations_XYT_CSV/SKT/0.005'):
-        visualize_cell_death_in_time(xyt_full_path=path,
-                                     full_path_to_save_fig=os.sep.join(
-                                         ['Results/CellDeathVisualizations',
-                                          path.split(os.sep)[-1].replace('.csv', '_skt_cell_death.png')]))
 
 
 def plot_endpoint_readout_for_compressed_temporal_resolution(temporal_resolution_axis: np.array,
@@ -553,7 +543,7 @@ def plot_endpoint_readout_for_compressed_temporal_resolution(temporal_resolution
     if SHOWFIG:
         plt.show()
     elif SAVEFIG:
-        exp_treatment = exp_treatment.replace('\\', '_').replace('/', '_')
+        exp_treatment = clean_string_from_bad_chars(exp_treatment)
         recent_death_only = kwargs.get('only_recent_death_flag_for_neighbors_calc', RECENT_DEATH_ONLY_FLAG)
         if recent_death_only:
             path_for_plot_dir = full_path_to_save_fig if full_path_to_save_fig is not None else \
@@ -580,3 +570,44 @@ def plot_endpoint_readout_for_compressed_temporal_resolution(temporal_resolution
     plt.close(fig)
 
 
+def plot_temporal_readout_for_entire_treatment(readouts: List[np.array],
+                                               labels: List[str],
+                                               treatment: str,
+                                               unit_of_time: int,
+                                               **kwargs) -> None:
+    treatment = clean_string_from_bad_chars(treatment_name=treatment)
+    only_consider_recent = kwargs.get('only_recent_death_flag_for_neighbors_calc',
+                                                           RECENT_DEATH_ONLY_FLAG)
+    path_to_dir_to_save = kwargs.get('dir_path', os.sep.join(
+        os.getcwd().split(os.sep)[:-1] + ['Results', 'TemporalMeasurementsPlots',
+                                          'Only recent death considered for neighbors results',
+                                          f'{treatment}']) if only_consider_recent else os.sep.join(
+        os.getcwd().split(os.sep)[:-1] + ['Results', 'TemporalMeasurementsPlots',
+                                          f'{treatment}']) )
+    fig_name = kwargs.get('fig_name', f'{treatment}_measurements_per_{unit_of_time}_min')
+
+    fig, axis = plt.subplots(1, 2)
+
+    colors = kwargs.get('colors_map', ['red', 'blue'])
+
+    for ax_idx, ax in enumerate(axis):
+
+        label = labels[ax_idx]
+        color = colors[ax_idx]
+        for treatment_readouts in readouts:
+            readout = treatment_readouts[ax_idx]
+            time_axis = np.arange(0, len(readout) * unit_of_time, unit_of_time)
+            ax.plot(time_axis, readout, c=color)
+
+        ax.set_xticks([time_axis[0]]+[time_axis[-1]])
+        ax.set_title(label)
+    fig.suptitle(f'{treatment} Treated')
+    if SHOWFIG:
+        plt.show()
+    elif SAVEFIG:
+        if not os.path.isdir(path_to_dir_to_save):
+            os.makedirs(path_to_dir_to_save)
+
+        full_path = os.sep.join([path_to_dir_to_save, fig_name])
+        plt.savefig(f'{full_path}.png', dpi=200)
+        plt.savefig(f'{full_path}.eps', dpi=200)

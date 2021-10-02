@@ -635,7 +635,7 @@ class MeasurementsTestCase(unittest.TestCase):
         self.assertAlmostEqual(accumulated_time_of_death_true, accumulated_fraction_of_death_ans, places=DECIMAL_POINT_PLACES_TO_ASSERT)
 
     def test_calc_single_experiment_temporal_p_nuc_and_p_prop_and_endpoint_readouts_1(self):
-        path_to_testing_csv = 'for_testing_csv_file.csv'
+        path_to_testing_csv = '../for_testing_csv_file.csv'
         p_nuc_by_time, p_prop_by_time, p_nuc_global, p_prop_global, \
         all_frames_nucleators_mask, all_frames_propagators_mask, accumulated_fraction_of_death_by_time =\
             calc_single_experiment_temporal_p_nuc_and_p_prop_and_endpoint_readouts_explicit_temporal_resolution(single_exp_full_path=path_to_testing_csv)
