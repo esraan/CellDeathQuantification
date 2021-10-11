@@ -684,11 +684,11 @@ def calc_slopes_and_probabilities_per_unit_of_time_single_experiment(exp_full_pa
                                                                      unit_of_time_min: int = 60,
                                                                      consider_majority_of_death_only: bool = True,
                                                                      **kwargs) -> Tuple[np.array,
-                                                                             np.array,
-                                                                             np.array,
-                                                                             Tuple[float, float],
-                                                                             Tuple[float, float],
-                                                                             Tuple[float, float]]:
+                                                                                        np.array,
+                                                                                        np.array,
+                                                                                        Tuple[float, float],
+                                                                                        Tuple[float, float],
+                                                                                        Tuple[float, float]]:
     """
     calculates the p(nuc), p(prop) and accumulated death probabilities for a given time
     interval (in minutes) specified by 'unit_of_time_min' argument.
@@ -810,7 +810,6 @@ def calc_slopes_and_probabilities_per_unit_of_time_entire_dir(dir_full_path: str
     lower_bound_death_percentile = kwargs.get('lower_bound_percentile', LOWER_DEATH_PERCENTILE_BOUNDARY)
     upper_bound_death_percentile = kwargs.get('upper_bound_percentile', UPPER_DEATH_PERCENTILE_BOUNDARY)
 
-
     # get all paths to the experiments' files.
     all_files_full_paths, all_files_only_exp_names = get_all_paths_csv_files_in_dir(dir_path=dir_full_path)
     total_exps = len(all_files_only_exp_names)
@@ -877,9 +876,9 @@ def calc_slopes_and_probabilities_per_unit_of_time_entire_dir(dir_full_path: str
         kwargs['set_y_lim'] = False
         if only_recent_death_flag_for_neighbors_calc:
             path_to_save_figure_dir_only = os.sep.join(
-                        os.getcwd().split(os.sep)[:-1] + ['Results', 'MeasurementsEndpointReadoutsPlots',
-                                                          'Only recent death considered for neighbors results',
-                                                          'Global_P_Nuc_VS_P_Prop'])
+                os.getcwd().split(os.sep)[:-1] + ['Results', 'MeasurementsEndpointReadoutsPlots',
+                                                  'Only recent death considered for neighbors results',
+                                                  'Global_P_Nuc_VS_P_Prop'])
         else:
             path_to_save_figure_dir_only = os.sep.join(
                 os.getcwd().split(os.sep)[:-1] + ['Results', 'MeasurementsEndpointReadoutsPlots',
@@ -911,7 +910,8 @@ def calc_slopes_and_probabilities_per_unit_of_time_entire_dir(dir_full_path: str
         for treatment_name in np.unique(np.array(treatment_per_readout)):
             readouts = exps_mean_per_time_unit_by_treatment[treatment_name]
             plot_temporal_readout_for_entire_treatment(readouts=readouts,
-                                                       labels=[f'P(Nuc) per {unit_of_time_min} min', f'P(Prop) per {unit_of_time_min} min'],
+                                                       labels=[f'P(Nuc) per {unit_of_time_min} min',
+                                                               f'P(Prop) per {unit_of_time_min} min'],
                                                        treatment=treatment_name,
                                                        unit_of_time=unit_of_time_min)
 
@@ -921,12 +921,306 @@ def calc_slopes_and_probabilities_per_unit_of_time_entire_dir(dir_full_path: str
                        'intercepts': all_nuc_intercepts}
 
     propagation_data = {'slopes': all_prop_slopes,
-                       'intercepts': all_prop_intercepts}
+                        'intercepts': all_prop_intercepts}
 
     accumulated_death_data = {'slopes': all_accumulated_death_slopes,
-                       'intercepts': all_accumulated_death_intercepts}
+                              'intercepts': all_accumulated_death_intercepts}
 
     return nucleation_data, propagation_data, accumulated_death_data
+
+
+def calc_fraction_of_adjacent_dying_cells_in_time_window(window_start_min: int,
+                                                         window_end_min: int,
+                                                         cells_neighbors: np.array,
+                                                         cells_times_of_death: np.array,
+                                                         **kwargs) -> Tuple[float, set]:
+    """
+    calculates the fraction of cells which die in the given window in approximation to already dead cells ('death seeders').
+    if the flag 'consider_death_within_window_only_flag' is set to True, the death seeding cells are only considered as
+    such if they died within the window timeframe, else, all dead cells before and within the window timeframe
+    are considered as death seeders.
+    death which occur in the window's end time argument ('window_end_time') value, are not considered as
+    part of the death within the window's timeframe.
+    :param window_start_min:
+    :param window_end_min:
+    :param cells_neighbors:
+    :param cells_times_of_death:
+    :param kwargs:
+    :return:
+    """
+    consider_death_within_window_only_flag = kwargs.get('consider_death_within_window_only_flag', True)
+    dead_cells_in_window_mask = None
+    dead_cells_in_window_indices = None
+
+    # death_mask = np.zeros_like(cells_times_of_death)
+    if consider_death_within_window_only_flag:
+        dead_cells_in_window_mask = (cells_times_of_death >= window_start_min) * (cells_times_of_death < window_end_min)
+    else:
+        dead_cells_in_window_mask = (cells_times_of_death < window_end_min)
+
+    # dead_cells_in_window_mask = cells_times_of_death[death_mask]
+    dead_cells_in_window_indices = np.where(dead_cells_in_window_mask)[0]
+    dead_cells_in_window_indices_set = set(dead_cells_in_window_indices)
+    # check which of the cells that are dead have neighbors that are also dead in the time window (/up to window included)
+    adjacent_dead_cells = set()
+    for dead_cell_idx in dead_cells_in_window_indices:
+        dead_cell_neighbors_indices = cells_neighbors[dead_cell_idx]
+        dead_cell_neighbors_indices_set = set(dead_cell_neighbors_indices)
+        adjacent_dead_cells.update(dead_cells_in_window_indices_set.intersection(dead_cell_neighbors_indices_set))
+
+    fraction_of_adjacent_dying_cells_in_time_window = len(adjacent_dead_cells) / len(
+        dead_cells_in_window_indices) if len(dead_cells_in_window_indices) > 0 else 0
+    indices_of_adjacent_dying_cells_in_time_window_set = adjacent_dead_cells
+    return fraction_of_adjacent_dying_cells_in_time_window, indices_of_adjacent_dying_cells_in_time_window_set
+
+
+def calc_time_difference_of_adjacent_death_in_time_window(window_start_min: int,
+                                                          window_end_min: int,
+                                                          cells_neighbors: np.array,
+                                                          cells_times_of_death: np.array,
+                                                          **kwargs) -> Tuple[float, set]:
+    raise NotImplemented('Difference in time of death is not suitable for sliding windows measurements!')
+
+
+def calc_single_exp_measurement_in_sliding_time_window(cells_xy: np.array,
+                                                       cells_times_of_death: np.array,
+                                                       exp_temporal_resolution: int,
+                                                       cells_neighbors: List[List[int]],
+                                                       sliding_window_size_in_minutes: int,
+                                                       exp_treatment: str,
+                                                       exp_name: str,
+                                                       **kwargs):
+    visualize_flag = kwargs.get('visualize_flag', True)
+    calculation_type = kwargs.get('calculation_type', 'fraction_of_adjacent_death')
+
+    # default is fraction_of_adjacent_death (performed in else as well)
+    if calculation_type == 'fraction_of_adjacent_death':
+        dir_of_calc = ['TemporalMeasurementsPlots', 'FractionOfAdjacentDeathsInSlidingTimeWindows']
+    elif calculation_type == 'adjacent_death_time_difference':
+        dir_of_calc = ['TemporalMeasurementsPlots', 'AdjacentDeathTimeDifference']
+    else:
+        dir_of_calc = ['TemporalMeasurementsPlots', 'FractionOfAdjacentDeathsInSlidingTimeWindows']
+
+    death_times_by_min = np.arange(cells_times_of_death.min(), cells_times_of_death.max(), exp_temporal_resolution)
+    sliding_windows_indices_by_min = [(window_start, window_start + sliding_window_size_in_minutes) for window_start in
+                                      death_times_by_min]
+    measurement_for_time_windows = []
+    indices_of_measurement_in_single_window_set = set()
+    for sliding_window_start, sliding_window_end in sliding_windows_indices_by_min:
+        if calculation_type == 'fraction_of_adjacent_death':
+            measurement_in_single_window, indices_of_measurement_in_single_window = calc_fraction_of_adjacent_dying_cells_in_time_window(
+                window_start_min=sliding_window_start,
+                window_end_min=sliding_window_end,
+                cells_neighbors=cells_neighbors,
+                cells_times_of_death=cells_times_of_death,
+                **kwargs)
+        elif calculation_type == 'adjacent_death_time_difference':
+            measurement_in_single_window, indices_of_measurement_in_single_window = calc_time_difference_of_adjacent_death_in_time_window(
+                window_start_min=sliding_window_start,
+                window_end_min=sliding_window_end,
+                cells_neighbors=cells_neighbors,
+                cells_times_of_death=cells_times_of_death,
+                **kwargs
+            )
+        else:
+            measurement_in_single_window, indices_of_measurement_in_single_window = calc_fraction_of_adjacent_dying_cells_in_time_window(
+                window_start_min=sliding_window_start,
+                window_end_min=sliding_window_end,
+                cells_neighbors=cells_neighbors,
+                cells_times_of_death=cells_times_of_death,
+                **kwargs)
+
+        measurement_for_time_windows.append(measurement_in_single_window)
+        indices_of_measurement_in_single_window_set.update(indices_of_measurement_in_single_window)
+
+    if visualize_flag:
+        path_for_fig = os.sep.join(os.getcwd().split(os.sep)[:-1] + ['Results'] +
+                                   dir_of_calc +
+                                   [f'{exp_treatment}'])
+        plot_measurements_by_time(measurement1_by_time=measurement_for_time_windows,
+                                  temporal_resolution=exp_temporal_resolution,
+                                  exp_treatment=exp_treatment,
+                                  exp_name=exp_name,
+                                  full_path_to_save_fig=path_for_fig)
+    if calculation_type == 'fraction_of_adjacent_death':
+        measurement_endpoint_readout = len(indices_of_measurement_in_single_window_set) / len(
+            cells_times_of_death)
+    elif calculation_type == 'adjacent_death_time_difference':
+        measurement_endpoint_readout = np.array(measurement_for_time_windows).mean()
+    else:
+        measurement_endpoint_readout = len(indices_of_measurement_in_single_window_set) / len(
+            cells_times_of_death)
+
+    return sliding_windows_indices_by_min, \
+           np.array(measurement_for_time_windows), \
+           indices_of_measurement_in_single_window_set, \
+           measurement_endpoint_readout
+
+
+def calc_time_difference_of_adjacent_death_in_single_experiment(
+        cells_neighbors: np.array,
+        cells_times_of_death: np.array,
+        exp_name: str,
+        exp_treatment: str,
+        **kwargs) -> Tuple[np.array, float]:
+    """
+    calculates the distribution and mean value of time differences between adjacent cells' deaths.
+    all temporal values are in minutes
+    :param cells_neighbors: list of all cells' neighbors (by their indices), list of list
+    :param cells_times_of_death: np.array of times of death in minutes for each cell.
+    :param kwargs:
+    :return: np.array adjacent death time differences distribution(hist), flaot - mean value of distribution.
+    """
+    visualize_flag = kwargs.get('visualize_flag', False)
+    bins_as_minutes = kwargs.get('bins_of_adjacent_death_diff', None)
+    min_max_normalization_on_hist_flag = kwargs.get('min_max_normalization_on_hist_flag', False)
+
+    if bins_as_minutes is None:
+        bins_as_minutes = kwargs.get('number_of_adjacent_death_diff_hist_bins', 10)
+    # to avoid taking into account the same cells multiple times, a set of examined cells
+    # is kept
+    examined_cells = set()
+    total_adjacent_death_time_diffs = []
+    for curr_cell_idx, curr_cell_death in enumerate(cells_times_of_death):
+        curr_cell_neighbors = cells_neighbors[curr_cell_idx]
+        cell_adjacent_death_times = []
+        for neighbor_idx in curr_cell_neighbors:
+            if neighbor_idx in examined_cells:
+                continue
+            cell_adjacent_death_times.append(cells_times_of_death[neighbor_idx])
+        cell_adjacent_death_times = np.array(cell_adjacent_death_times)
+        cell_adjacent_death_times_diff_from_curr_cell_death = cell_adjacent_death_times - curr_cell_death
+        total_adjacent_death_time_diffs += cell_adjacent_death_times_diff_from_curr_cell_death.tolist()
+        examined_cells.update([curr_cell_idx])
+
+    total_adjacent_death_time_diffs = np.array(total_adjacent_death_time_diffs)
+    mean_of_adjacent_death_diff = total_adjacent_death_time_diffs.mean()
+    total_adjacent_death_time_diffs_hist = np.histogram(total_adjacent_death_time_diffs, bins=bins_as_minutes)[0]
+
+    if min_max_normalization_on_hist_flag:
+        total_adjacent_death_time_diffs_hist = (total_adjacent_death_time_diffs_hist-total_adjacent_death_time_diffs_hist.min())/(total_adjacent_death_time_diffs_hist.max()-total_adjacent_death_time_diffs_hist.min())
+
+    if visualize_flag:
+        exp_treatment = clean_string_from_bad_chars(treatment_name=exp_treatment)
+        dir_path = os.sep.join(os.getcwd().split(os.sep)[:-1] + ['Results',
+                                                                 'AdjacentDeathTimeDifferences', f'{exp_treatment}'])
+
+        x_ticks, x_tick_labels = None, None
+        if isinstance(bins_as_minutes, Iterable):
+            x_ticks = bins_as_minutes[:-1]
+            x_tick_labels = [f'{bins_as_minutes[bin_idx]}-{bins_as_minutes[bin_idx+1]}' for bin_idx in range(len(bins_as_minutes[:-1]))]
+
+        visualize_histogram_of_values(hist_values=total_adjacent_death_time_diffs_hist,
+                                      title=f'{exp_treatment}\n{exp_name}',
+                                      x_label='Time differences between adjacent deaths',
+                                      y_label='Time (Min)',
+                                      x_tick_labels=x_tick_labels,
+                                      path_to_dir_to_save=dir_path,
+                                      fig_name=f'{exp_name}')
+    return total_adjacent_death_time_diffs_hist, mean_of_adjacent_death_diff
+
+
+def calc_multiple_exps_measurements(main_exp_dir_full_path: str,
+                                    limit_exp_num: int = float('inf'),
+                                    **kwargs):
+    ######
+    # getting all kwargs
+    visualize_flag = kwargs.get('visualize_flag', False)
+    treatments_to_include = kwargs.get('treatments_to_include', 'all')
+    use_log_flag = kwargs.get('use_log', USE_LOG)
+    meta_data_file_full_path = kwargs.get('metadata_file_full_path', METADATA_FILE_FULL_PATH)
+    compressed_flag = kwargs.get('use_compressed_exps_data_flag', False)
+    neighbors_threshold_dist = kwargs.get('neighbors_threshold_dist', DIST_THRESHOLD_IN_PIXELS)
+    use_sliding_time_window = kwargs.get('use_sliding_time_window', False)
+    if use_sliding_time_window:
+        sliding_time_window_size_in_min = kwargs.get('sliding_time_window_size_in_min', 100)
+        type_of_measurement = 'fraction_of_adjacent_death'
+    else:
+        type_of_measurement = kwargs.get('type_of_measurement', 'adjacent_death_time_difference')
+        bins_of_adjacent_death_diff = kwargs.get('bins_of_adjacent_death_diff', None)
+    #####
+
+    # # LOG FILE: clean and write headline
+    # with open('../experiments_with_bad_results.txt', 'w') as f:
+    #     f.write(f'analyzed directory path:{main_exp_dir_full_path}\nExperiments with P(Nuc)+P(Prop)<1 : \n')
+
+    if main_exp_dir_full_path is None:
+        main_exp_dir_full_path = os.sep.join(
+            os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV', 'OriginalTimeMinutesData'])
+
+    all_files_to_analyze_full_paths, all_files_to_analyze_only_exp_names = \
+        get_all_paths_csv_files_in_dir(dir_path=dir_path)
+
+    total_exps = len(all_files_to_analyze_only_exp_names)
+
+    all_endpoint_readouts_by_experiment, all_exps_names, all_exps_treatments = list(), list(), list()
+
+    for exp_idx, single_exp_full_path in enumerate(all_files_to_analyze_full_paths):
+        if limit_exp_num < exp_idx + 1:
+            break
+
+        exp_name = all_files_to_analyze_only_exp_names[exp_idx]
+
+        exp_treatment, explicit_temporal_resolution = \
+            get_exp_treatment_type_and_temporal_resolution(exp_file_name=single_exp_full_path.split(os.sep)[-1],
+                                                           meta_data_file_full_path=meta_data_file_full_path,
+                                                           compressed_flag=compressed_flag)
+        # skip un-wanted treatments
+        if treatments_to_include != 'all' and sum([treatment_shortname in exp_treatment.lower() for treatment_shortname in treatments_to_include]) == 0:
+            continue
+
+        all_exps_names.append(exp_name)
+        all_exps_treatments.append(exp_treatment)
+
+        print(f'analyzing exp {exp_name} | {exp_idx + 1}/{total_exps}')
+        exp_df = pd.read_csv(single_exp_full_path)
+        cells_xy, cells_times_of_death = exp_df.loc[:, ['cell_x', 'cell_y']].values, exp_df.loc[:,
+                                                                                     ['death_time']].values
+        cells_neighbors_lvl1, cells_neighbors_lvl2, cells_neighbors_lvl3 = get_cells_neighbors(cells_xy,
+                                                                                  threshold_dist=neighbors_threshold_dist)
+        # if treatments_to_include == 'all':
+        #     kwargs['visualize_flag'] = False
+        if use_sliding_time_window:
+            sliding_windows_indices_by_min, \
+            measurement_temporal_readout_in_windows, \
+            indices_of_measurement_in_windows_set, \
+            measurement_endpoint_readout = calc_single_exp_measurement_in_sliding_time_window(
+                cells_xy=cells_xy,
+                cells_times_of_death=cells_times_of_death,
+                cells_neighbors=cells_neighbors_lvl1,
+                exp_temporal_resolution=explicit_temporal_resolution,
+                sliding_window_size_in_minutes=sliding_time_window_size_in_min,
+                exp_treatment=exp_treatment,
+                exp_name=exp_name,
+                **kwargs)
+        elif type_of_measurement == 'adjacent_death_time_difference':
+            total_adjacent_death_time_diffs_hist, measurement_endpoint_readout = calc_time_difference_of_adjacent_death_in_single_experiment(
+                cells_neighbors=cells_neighbors_lvl1,
+                cells_times_of_death=cells_times_of_death,
+                exp_name=exp_name,
+                exp_treatment=exp_treatment,
+                **kwargs
+            )
+
+        kwargs['visualize_flag'] = True
+
+        all_endpoint_readouts_by_experiment.append(measurement_endpoint_readout)
+
+    if visualize_flag:
+        if type_of_measurement == 'adjacent_death_time_difference':
+            path_for_fig = os.sep.join(os.getcwd().split(os.sep)[:-1] + ['Results', 'MeasurementsEndpointReadoutsPlots',
+                                                                         'MeanTimeOfAdjacentDeath'])
+        else:
+            path_for_fig = os.sep.join(os.getcwd().split(os.sep)[:-1] + ['Results', 'MeasurementsEndpointReadoutsPlots',
+                                                                     'FractionOfAdjacentDeathsInSlidingTimeWindows'])
+        visualize_endpoint_readouts_by_treatment_about_readouts(x_readout=all_endpoint_readouts_by_experiment,
+                                                                y_readout=np.ones_like(
+                                                                    all_endpoint_readouts_by_experiment),
+                                                                treatment_per_readout=all_exps_treatments,
+                                                                full_path_to_save_fig=path_for_fig, x_label='Treatment',
+                                                                y_label='Fraction of adjacent deaths',
+                                                                plot_about_treatment=True,
+                                                                set_y_lim=False)
 
 
 if __name__ == '__main__':
@@ -1006,9 +1300,29 @@ if __name__ == '__main__':
     #                                                                      consider_majority_of_death_only=True)
 
     # multiple experiments slopes and probabilities per unit of time testing
+    # dir_path = os.sep.join(os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV', 'OriginalTimeMinutesData'])
+    # calc_slopes_and_probabilities_per_unit_of_time_entire_dir(dir_full_path=dir_path,
+    #                                                           treatments_to_include='all',
+    #                                                           unit_of_time_min=60,
+    #                                                           consider_majority_of_death_only=True)
+
+    # p_prop measurement as a fraction of adjacent dying cells in window:
+    # dir_path = os.sep.join(os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV', 'OriginalTimeMinutesData'])
+    # calc_multiple_exps_measurements(main_exp_dir_full_path=dir_path,
+    #                                 limit_exp_num=float('inf'),
+    #                                 use_sliding_time_window=True,
+    #                                 sliding_time_window_size_in_min=60,
+    #                                 visualize_flag=True,
+    #                                 consider_death_within_window_only_flag=True)
+    # time of adjacent death diff measurement
+    # time of death differences between adjacent cells
     dir_path = os.sep.join(os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV', 'OriginalTimeMinutesData'])
-    calc_slopes_and_probabilities_per_unit_of_time_entire_dir(dir_full_path=dir_path,
-                                                              treatments_to_include='all',
-                                                              unit_of_time_min=60,
-                                                              consider_majority_of_death_only=True)
+    calc_multiple_exps_measurements(main_exp_dir_full_path=dir_path,
+                                    limit_exp_num=float('inf'),
+                                    use_sliding_time_window=False,
+                                    type_of_measurement='adjacent_death_time_difference',
+                                    bins_of_adjacent_death_diff=np.arange(0, 201, 10),
+                                    treatments_to_include='all',#['superkiller', 'fac', 'erastin'],
+                                    visualize_flag=True
+                                    )
     pass

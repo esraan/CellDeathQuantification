@@ -380,29 +380,32 @@ def visualize_cell_death_in_time(xyt_df: pd.DataFrame = None,
     plt.close(fig)
 
 
-def plot_measurements_by_time(p_nuc_by_time: np.array,
-                              p_prop_by_time: np.array,
-                              accumulated_fraction_of_death_by_time: np.array,
-                              temporal_resolution: int,
-                              exp_name: str, exp_treatment: str,
+def plot_measurements_by_time(measurement1_by_time: np.array,
+                              measurement2_by_time: np.array = None,
+                              measurement3_by_time: np.array = None,
+                              temporal_resolution: int = None,
+                              exp_name: str = None, exp_treatment: str = None,
                               full_path_to_save_fig: str = None) -> None:
     """
 
-    :param p_nuc_by_time:
-    :param p_prop_by_time:
-    :param accumulated_fraction_of_death_by_time:
+    :param measurement1_by_time:
+    :param measurement2_by_time:
+    :param measurement3_by_time:
     :param temporal_resolution:
     :param exp_name:
     :param exp_treatment:
     :param full_path_to_save_fig:
     :return:
     """
+    if temporal_resolution is None:
+        raise ValueError('temporal resolution can not be None!')
+
     plt.clf()
 
     # clean exp_name and treatment from bad characters
     exp_name, exp_treatment = clean_string_from_bad_chars(exp_treatment, replacement=''), clean_string_from_bad_chars(exp_treatment)
 
-    max_time = len(p_nuc_by_time) * temporal_resolution
+    max_time = len(measurement1_by_time) * temporal_resolution
     time_axis = np.arange(0, max_time, temporal_resolution)
 
     fig, ax = plt.subplots()
@@ -410,29 +413,31 @@ def plot_measurements_by_time(p_nuc_by_time: np.array,
     ax.set_title(f'Treatment: {exp_treatment}\nexp:{exp_name}')
 
     ax1_clr = 'tab:blue'
-    ax.plot(time_axis, p_nuc_by_time, label='Nucleation')
+    ax.plot(time_axis, measurement1_by_time, label='Nucleation')
     ax.set_ylabel('P(Nuc)', color=ax1_clr)
 
     ax.tick_params(axis='y', labelcolor=ax1_clr)
     ax.set_ylim(0, 1)
     ax.set_xticks([time_axis[0], time_axis[len(time_axis) // 2], time_axis[-1]])
     # ax.set_xticklabels(['{}-{}'.format(x, x + 100) for x in time_ticks])
-    ax2_color = 'tab:red'
-    ax2 = ax.twinx()
-    ax2.plot(time_axis, p_prop_by_time, label='Propagation', color=ax2_color)
-    ax2.set_ylabel('P(Prop)', color=ax2_color)
-    ax2.tick_params(axis='y', labelcolor=ax2_color)
-    ax2.set_ylim(0, 1)
-    # plotting accumulated death
-    ax.set_xlabel('Time Window (Minutes)')
-    ax.plot(time_axis, accumulated_fraction_of_death_by_time, label='Accumulated Death', color='black', marker='p')
+    if measurement2_by_time is not None:
+        ax2_color = 'tab:red'
+        ax2 = ax.twinx()
+        ax2.plot(time_axis, measurement2_by_time, label='Propagation', color=ax2_color)
+        ax2.set_ylabel('P(Prop)', color=ax2_color)
+        ax2.tick_params(axis='y', labelcolor=ax2_color)
+        ax2.set_ylim(0, 1)
+        # plotting accumulated death
+        ax.set_xlabel('Time Window (Minutes)')
+    if measurement3_by_time is not None:
+        ax.plot(time_axis, measurement3_by_time, label='Accumulated Death', color='black', marker='p')
 
-    # plot lines to visualize 10%-90% cells deaths
-    tenth_percentile = np.where(accumulated_fraction_of_death_by_time >= .1)[0][0]
-    plt.axvline(x=time_axis[tenth_percentile], c='black', linestyle='--', linewidth=0.7)
+        # plot lines to visualize 10%-90% cells deaths
+        tenth_percentile = np.where(measurement3_by_time >= .1)[0][0]
+        plt.axvline(x=time_axis[tenth_percentile], c='black', linestyle='--', linewidth=0.7)
 
-    nineteenth_percentile = np.where(accumulated_fraction_of_death_by_time >= .9)[0][0]
-    plt.axvline(x=time_axis[nineteenth_percentile], c='black', linestyle='--', linewidth=0.7)
+        nineteenth_percentile = np.where(measurement3_by_time >= .9)[0][0]
+        plt.axvline(x=time_axis[nineteenth_percentile], c='black', linestyle='--', linewidth=0.7)
 
     plt.tight_layout()
 
@@ -611,3 +616,55 @@ def plot_temporal_readout_for_entire_treatment(readouts: List[np.array],
         full_path = os.sep.join([path_to_dir_to_save, fig_name])
         plt.savefig(f'{full_path}.png', dpi=200)
         plt.savefig(f'{full_path}.eps', dpi=200)
+
+
+def visualize_histogram_of_values(
+        hist_values: np.array,
+        title: str,
+        x_label: str,
+        y_label: str,
+        x_tick_labels: List[str] = None,
+        path_to_dir_to_save: str = None,
+        fig_name: str = None,
+        **kwargs
+):
+    """
+    histogram values must be pre-computed before invoking this function as it does not call
+    plt.hist but plt.bar .
+    :param hist_values:
+    :param title:
+    :param x_label:
+    :param y_label:
+    :param x_ticks:
+    :param x_tick_labels:
+    :param path_to_dir_to_save:
+    :param fig_name:
+    :return:
+    """
+    plt.clf()
+
+    fig, ax = plt.subplots()
+
+    if x_tick_labels is not None:
+        ax.bar(np.arange(0, len(hist_values), 1), hist_values)
+        ax.set_xticks(np.arange(0, len(hist_values), 1))
+        ax.set_xticklabels(x_tick_labels)
+        ax.tick_params(axis='x', labelrotation=-45, labelsize=kwargs.get('x_tick_label_size', 8))
+    else:
+        ax.bar(np.arange(0, len(hist_values), 1), hist_values)
+
+    ax.set_title(title)
+    ax.set_xlabel(x_label)
+    ax.set_ylabel(y_label)
+
+    if SHOWFIG:
+        plt.show()
+    elif SAVEFIG:
+        if not os.path.isdir(path_to_dir_to_save):
+            os.makedirs(path_to_dir_to_save)
+
+        full_path = os.sep.join([path_to_dir_to_save, fig_name])
+        plt.savefig(f'{full_path}.png', dpi=200)
+        plt.savefig(f'{full_path}.eps', dpi=200)
+
+    plt.close(fig)
