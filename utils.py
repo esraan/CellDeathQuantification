@@ -3,7 +3,7 @@ from typing import *
 import numpy as np
 import pandas as pd
 from scipy.spatial import Voronoi
-from scipy.stats import linregress
+from scipy.stats import linregress, zscore
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error as mse
 from sklearn.metrics.pairwise import euclidean_distances as euc_dis
@@ -125,6 +125,8 @@ def get_marker_per_treatment_list(all_treatments: np.array) -> Tuple[List, List,
         colors_list = np.load(colors_list_path).tolist()
         treatment_to_marker_dict = load_dict_from_json(treatment_to_marker_dict_path)
         treatment_to_color_dict = load_dict_from_json(treatment_to_color_dict_path)
+        markers_list = [treatment_to_marker_dict[treatment_name] for treatment_name in all_treatments]
+        colors_list = [treatment_to_color_dict[treatment_name] for treatment_name in all_treatments]
         return markers_list, colors_list, treatment_to_marker_dict, treatment_to_color_dict
 
     all_possible_markers = list(get_all_possible_mpl_markers().keys())
@@ -430,3 +432,29 @@ def calc_signal_slope_and_intercept(x: np.array = None, y: np.array = None) -> T
 
 def clean_string_from_bad_chars(treatment_name: str, replacement='_') -> str:
     return treatment_name.replace('\\', replacement).replace('/', replacement)
+
+
+def normalize(values: np.array, normalization_method:str = 'z_score', axis: int = 0):
+    if normalization_method == 'z_score':
+        return zscore(values, axis=axis)
+    Warning('the normalization method is unknown!')
+    return values
+
+
+def get_dead_cells_mask_in_window(window_start_time_min: int,
+                                  window_end_time_min: int,
+                                  cells_times_of_death: np.array,
+                                  consider_death_in_window_only) -> np.array:
+    """
+    returns a boolean np.array the shape of cells_times_of_death where each value is True if the cell is dead
+    and False otherwise.
+    :param window_start_time_min: int, the starting time of the window in minutes
+    :param window_end_time_min: int, the end time of the window in minutes
+    :param cells_times_of_death: np.array, cells' times of death (in minutes) indexed according to cell indices.
+    :param consider_death_in_window_only: bool, whether to consider death which occurred prior to window_start_time_min.
+    :return:
+    """
+    if consider_death_in_window_only:
+        return (cells_times_of_death >= window_start_time_min) * (cells_times_of_death < window_end_time_min)
+    else:
+        return cells_times_of_death < window_end_time_min

@@ -95,3 +95,5 @@
 20200311_HAP1_ML162_xy3.csv,2020.03.11,HAP1,"DMEM + 4uM ML162 (plastic, no oil)",3,,3,2020.03.11 HAP1 4uM ML162_s03t001c2.tif,Sytox,5
 20200311_HAP1_ML162_xy4.csv,2020.03.11,HAP1,"DMEM + 4uM ML162 (plastic, no oil)",4,,4,2020.03.11 HAP1 4uM ML162_s04t001c2.tif,Sytox,5
 20200311_HAP1_ML162_xy6.csv,2020.03.11,HAP1,"DMEM + 4uM ML162 (plastic, no oil)",6,,6,2020.03.11 HAP1 4uM ML162_s05t001c2.tif,Sytox,5
+xyt_ferroptosis_attempt.csv,2021.10.11, SIM,ferroptosis_simulation, 6,,6,2021.10.11 SIM, SIM, 15
+apoptosis_attempt.csv,2021.10.11, SIM,apoptosis_simulation, 6,,6,2021.10.11 SIM, SIM, 15

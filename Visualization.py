@@ -668,3 +668,74 @@ def visualize_histogram_of_values(
         plt.savefig(f'{full_path}.eps', dpi=200)
 
     plt.close(fig)
+
+
+def present_fig(fig: plt.figure,
+                ax: plt.axis,
+                measurement_type: str,
+                save_fig: bool = None,
+                show_fig: bool = None,
+                full_dir_path_to_save_fig: str = None) -> None:
+
+    if show_fig is None:
+        show_fig = SHOWFIG
+    if save_fig is None:
+        save_fig = SAVEFIG
+
+    if SHOWFIG:
+        plt.show()
+    elif SAVEFIG:
+        path_for_plot_dir = full_dir_path_to_save_fig if full_dir_path_to_save_fig is not None else os.sep.join(
+            os.getcwd().split(os.sep)[:-1] + ['Results', 'MeasurementsEndpointReadoutsPlots'])
+        if not os.path.isdir(path_for_plot_dir):
+            os.makedirs(path_for_plot_dir)
+
+        path_for_plot = os.sep.join(
+            [path_for_plot_dir, f'{measurement_type}_about_treatment'])
+
+        fig.savefig(path_for_plot + '.png', dpi=200)  # , bbox_extra_artists=[lgd], bbox_inches='tight')
+        fig.savefig(path_for_plot + '.eps', dpi=200)  # , bbox_extra_artists=[lgd], bbox_inches='tight')
+
+
+def visualize_measurement_per_treatment(readouts_per_experiment: np.array,
+                                        treatment_name_per_readout: np.array,
+                                        x_label: str,
+                                        y_label: str,
+                                        measurement_type: str,
+                                        dir_to_save_fig_full_path: str,
+                                        **kwargs) -> None:
+
+    # set_y_lim = kwargs.get('set_y_lim', True)
+    save_fig = kwargs.get('save_fig', SAVEFIG)
+    show_fig = kwargs.get('show_fig', SHOWFIG)
+
+    marker_per_point, color_per_point, treatment_to_marker, treatment_to_color = \
+        get_marker_per_treatment_list(treatment_name_per_readout)
+
+    unique_treatment_names = np.unique(treatment_name_per_readout)
+    unique_treatment_names_to_idx = {treatment_name: idx for idx, treatment_name in enumerate(unique_treatment_names)}
+    treatment_idx_for_experiment = np.array([unique_treatment_names_to_idx[treatment_name]
+                                             for treatment_name in treatment_name_per_readout])
+
+    plt.clf()
+
+    fig, ax = plt.subplots()
+    for xp, yp, m, c in zip(treatment_idx_for_experiment, readouts_per_experiment, marker_per_point, color_per_point):
+        ax.scatter([xp], [yp], marker=m, color=c)
+
+    ax.set_xlabel(x_label)
+    ax.set_ylabel(y_label)
+    ax.set_xticks(np.arange(0, len(unique_treatment_names), 1))
+    ax.set_xticklabels(unique_treatment_names)
+    ax.tick_params(axis='x', labelrotation=-45, labelsize=kwargs.get('x_tick_label_size', 8))
+
+    plt.setp(ax.xaxis.get_majorticklabels(), ha="left", rotation_mode="anchor")
+    plt.tight_layout()
+
+    present_fig(fig, ax,
+                measurement_type=measurement_type,
+                save_fig=save_fig,
+                show_fig=show_fig,
+                full_dir_path_to_save_fig=dir_to_save_fig_full_path)
+
+    plt.close(fig)
