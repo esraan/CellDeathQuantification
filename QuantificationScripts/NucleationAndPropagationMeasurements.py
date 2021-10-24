@@ -1464,7 +1464,7 @@ if __name__ == '__main__':
     #                                 bins_of_adjacent_death_diff=np.arange(0, 4, 0.5),
     #                                 treatments_to_include=['superkiller', 'fac', 'erastin', 'simulation'],
     #                                 visualize_flag=True,
-    #                                 visualize_each_exp_flag=True
+    #                                 visualize_each_exp_flag=False
     #                                 )
 
     # time of death variance between adjacent cells in sliding time windows
