@@ -3,7 +3,7 @@ import os
 # todo: add explanation to all global parameters
 
 
-SHOWFIG = True
+SHOWFIG = False
 SAVEFIG = not SHOWFIG
 
 RECENT_DEATH_ONLY_FLAG = False

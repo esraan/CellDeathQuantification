@@ -385,7 +385,8 @@ def plot_measurements_by_time(measurement1_by_time: np.array,
                               measurement3_by_time: np.array = None,
                               temporal_resolution: int = None,
                               exp_name: str = None, exp_treatment: str = None,
-                              full_path_to_save_fig: str = None) -> None:
+                              full_path_to_save_fig: str = None,
+                              max_time: int = None) -> None:
     """
 
     :param measurement1_by_time:
@@ -403,10 +404,10 @@ def plot_measurements_by_time(measurement1_by_time: np.array,
     plt.clf()
 
     # clean exp_name and treatment from bad characters
-    exp_name, exp_treatment = clean_string_from_bad_chars(exp_treatment, replacement=''), clean_string_from_bad_chars(exp_treatment)
+    exp_name, exp_treatment = clean_string_from_bad_chars(exp_name, replacement=''), clean_string_from_bad_chars(exp_treatment)
 
-    max_time = len(measurement1_by_time) * temporal_resolution
-    time_axis = np.arange(0, max_time, temporal_resolution)
+    max_time = len(measurement1_by_time) * temporal_resolution if max_time is None else max_time
+    time_axis = np.arange(0, max_time+1, temporal_resolution)
 
     fig, ax = plt.subplots()
 
@@ -677,23 +678,25 @@ def present_fig(fig: plt.figure,
                 measurement_type: str,
                 save_fig: bool = None,
                 show_fig: bool = None,
-                full_dir_path_to_save_fig: str = None) -> None:
+                full_dir_path_to_save_fig: str = None,
+                fig_name_suffix: str = '',
+                fig_name_prefix: str = '') -> None:
 
     if show_fig is None:
         show_fig = SHOWFIG
     if save_fig is None:
         save_fig = SAVEFIG
 
-    if SHOWFIG:
+    if show_fig:
         plt.show()
-    elif SAVEFIG:
+    elif save_fig:
         path_for_plot_dir = full_dir_path_to_save_fig if full_dir_path_to_save_fig is not None else os.sep.join(
             os.getcwd().split(os.sep)[:-1] + ['Results', 'MeasurementsEndpointReadoutsPlots'])
         if not os.path.isdir(path_for_plot_dir):
             os.makedirs(path_for_plot_dir)
 
         path_for_plot = os.sep.join(
-            [path_for_plot_dir, f'{measurement_type}_about_treatment'])
+            [path_for_plot_dir, f'{fig_name_prefix}_{measurement_type}_{fig_name_suffix}_about_treatment'])
 
         fig.savefig(path_for_plot + '.png', dpi=200)  # , bbox_extra_artists=[lgd], bbox_inches='tight')
         fig.savefig(path_for_plot + '.eps', dpi=200)  # , bbox_extra_artists=[lgd], bbox_inches='tight')
@@ -710,6 +713,9 @@ def visualize_measurement_per_treatment(readouts_per_experiment: np.array,
     # set_y_lim = kwargs.get('set_y_lim', True)
     save_fig = kwargs.get('save_fig', SAVEFIG)
     show_fig = kwargs.get('show_fig', SHOWFIG)
+
+    fig_name_suffix = kwargs.get('fig_name_suffix', '')
+    fig_name_prefix = kwargs.get('fig_name_prefix', '')
 
     marker_per_point, color_per_point, treatment_to_marker, treatment_to_color = \
         get_marker_per_treatment_list(treatment_name_per_readout)
@@ -738,6 +744,8 @@ def visualize_measurement_per_treatment(readouts_per_experiment: np.array,
                 measurement_type=measurement_type,
                 save_fig=save_fig,
                 show_fig=show_fig,
-                full_dir_path_to_save_fig=dir_to_save_fig_full_path)
+                full_dir_path_to_save_fig=dir_to_save_fig_full_path,
+                fig_name_suffix=fig_name_suffix,
+                fig_name_prefix=fig_name_prefix)
 
     plt.close(fig)

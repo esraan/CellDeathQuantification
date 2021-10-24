@@ -975,10 +975,10 @@ def calc_fraction_of_adjacent_dying_cells_in_time_window(window_start_min: int,
 
 
 def calc_adjacent_death_variance_in_time_window(window_start_min: int,
-                                                          window_end_min: int,
-                                                          cells_neighbors: np.array,
-                                                          cells_times_of_death: np.array,
-                                                          **kwargs) -> Tuple[float, set]:
+                                                window_end_min: int,
+                                                cells_neighbors: np.array,
+                                                cells_times_of_death: np.array,
+                                                **kwargs) -> Tuple[float, set]:
     """
     calculates the variance of cells' times of death which die in the given window in approximation to already
         dead cells ('death seeders').
@@ -1002,21 +1002,24 @@ def calc_adjacent_death_variance_in_time_window(window_start_min: int,
                                                               cells_times_of_death=cells_times_of_death,
                                                               consider_death_in_window_only=consider_death_within_window_only_flag)
 
-    # dead_cells_in_window_mask = cells_times_of_death[death_mask]
     dead_cells_in_window_indices = np.where(dead_cells_in_window_mask)[0]
-    dead_cells_in_window_indices_set = set(dead_cells_in_window_indices)
 
     # normalize times of death by z score to avoid skewing the results
     cells_times_of_death = normalize(cells_times_of_death.copy(), normalization_method='z_score')
 
     # check which of the cells that are dead have neighbors that are also dead in the time window (/up to window included)
+    examined_cells = set()
     adjacent_death_variance_scores = []
     for dead_cell_idx in dead_cells_in_window_indices:
         dead_cell_neighbors_indices = cells_neighbors[dead_cell_idx]
-        # dead_cell_neighbors_indices = np.array() # todo: remove all previous curr cell index
-        dead_cell_neighbors_death_times = cells_times_of_death[dead_cell_neighbors_indices]
-        dead_cell_neighbors_death_times_variance = np.var(dead_cell_neighbors_death_times)
-        adjacent_death_variance_scores.append(dead_cell_neighbors_death_times_variance)
+
+        neighbors_death_mask = np.array(list(set(dead_cell_neighbors_indices) - set(examined_cells)))
+        if len(neighbors_death_mask) > 0:
+            dead_cell_neighbors_death_times = cells_times_of_death[dead_cell_neighbors_indices]
+            dead_cell_neighbors_death_times_variance = np.var(dead_cell_neighbors_death_times)
+            adjacent_death_variance_scores.append(dead_cell_neighbors_death_times_variance)
+
+        examined_cells.update([dead_cell_idx])
 
     adjacent_death_mean_variance = np.array(adjacent_death_variance_scores).mean()
     return adjacent_death_mean_variance, set()
@@ -1039,7 +1042,7 @@ def calc_single_exp_measurement_in_sliding_time_window(cells_xy: np.array,
                                                        exp_name: str,
                                                        **kwargs):
     visualize_flag = kwargs.get('visualize_flag', True)
-    calculation_type = kwargs.get('calculation_type', 'fraction_of_adjacent_death')
+    calculation_type = kwargs.get('type_of_measurement', 'fraction_of_adjacent_death')
 
     # default is fraction_of_adjacent_death (performed in else as well)
     if calculation_type == 'fraction_of_adjacent_death':
@@ -1130,7 +1133,7 @@ def calc_time_difference_of_adjacent_death_in_single_experiment(
     :param cells_neighbors: list of all cells' neighbors (by their indices), list of list
     :param cells_times_of_death: np.array of times of death in minutes for each cell.
     :param kwargs:
-    :return: np.array adjacent death time differences distribution(hist), flaot - mean value of distribution.
+    :return: np.array adjacent death time differences distribution(hist), float - mean value of distribution.
     """
     visualize_flag = kwargs.get('visualize_flag', False)
     bins_as_minutes = kwargs.get('bins_of_adjacent_death_diff', None)
@@ -1182,6 +1185,74 @@ def calc_time_difference_of_adjacent_death_in_single_experiment(
     return total_adjacent_death_time_diffs_hist, mean_of_adjacent_death_diff
 
 
+def calc_adjacent_death_variance_in_single_experiment(cells_neighbors: np.array,
+                                                      cells_times_of_death: np.array,
+                                                      exp_temporal_resolution: Union[float, int],
+                                                      exp_name: str,
+                                                      exp_treatment: str,
+                                                      **kwargs) -> Tuple[np.array, float]:
+    """
+    calculates the variance of adjacent time of cells' death and the variance mean in the entire experiment.
+    all temporal values are in minutes.
+    :param exp_treatment: str, experiment treatment
+    :param exp_name: str, experiment name
+    :param exp_temporal_resolution: int/float, the temporal resolution of the experiment
+    :param cells_neighbors: list[list[int]],  list of all cells' neighbors (by their indices), list of list
+    :param cells_times_of_death: np.array of times of death in minutes for each cell.
+    :param kwargs:
+    :return: np.array adjacent death time differences distribution(hist), float - mean value of distribution.
+    """
+    visualize_flag = kwargs.get('visualize_flag', False)
+    max_time_of_death = cells_times_of_death.max()
+
+    normalized_cells_times_of_death = normalize(cells_times_of_death.copy(), normalization_method='z_score')
+
+    adjacent_death_variance_scores = []
+    examined_cells_indices = set()
+
+    for curr_time_of_death in np.arange(0, max_time_of_death + 1, exp_temporal_resolution):
+        all_dead_cells_in_curr_time_indices = set(np.where(cells_times_of_death == curr_time_of_death)[0])
+
+        adjacent_death_variance_in_curr_time = []
+
+        for curr_dead_cell_idx in all_dead_cells_in_curr_time_indices:
+            dead_cell_neighbors_indices = cells_neighbors[curr_dead_cell_idx]
+            dead_cell_neighbors_indices = np.array(list(set(dead_cell_neighbors_indices) - examined_cells_indices))
+
+            if len(dead_cell_neighbors_indices) > 0:
+                dead_cell_neighbors_death_times = normalized_cells_times_of_death[dead_cell_neighbors_indices]
+                dead_cell_neighbors_death_times_variance = np.var(dead_cell_neighbors_death_times)
+                adjacent_death_variance_in_curr_time.append(dead_cell_neighbors_death_times_variance)
+
+            examined_cells_indices.update([curr_dead_cell_idx])
+        if len(adjacent_death_variance_in_curr_time)>0:
+            mean_variance_of_adjacent_death_in_curr_time = np.array(adjacent_death_variance_in_curr_time).mean()
+        else:
+            mean_variance_of_adjacent_death_in_curr_time = 0
+        adjacent_death_variance_scores.append(mean_variance_of_adjacent_death_in_curr_time)
+
+    entire_experiment_mean_time_of_adjacent_death_variance = np.array(adjacent_death_variance_scores).mean()
+    adjacent_death_mean_variance = entire_experiment_mean_time_of_adjacent_death_variance
+    adjacent_death_variance_scores = np.array(adjacent_death_variance_scores)
+
+    if visualize_flag:
+        exp_treatment = clean_string_from_bad_chars(treatment_name=exp_treatment)
+        full_dir_path_to_save_fig = os.sep.join(os.getcwd().split(os.sep)[:-1] + ['Results',
+                                                                                  'AdjacentDeathTimeDifferences',
+                                                                                  f'{exp_treatment}'])
+
+        plot_measurements_by_time(measurement1_by_time=adjacent_death_variance_scores,
+                                  measurement2_by_time=None,
+                                  measurement3_by_time=None,
+                                  temporal_resolution=exp_temporal_resolution,
+                                  exp_name=exp_name,
+                                  exp_treatment=exp_treatment,
+                                  full_path_to_save_fig=full_dir_path_to_save_fig,
+                                  max_time=max_time_of_death)
+
+    return adjacent_death_variance_scores, adjacent_death_mean_variance
+
+
 def calc_multiple_exps_measurements(main_exp_dir_full_path: str,
                                     limit_exp_num: int = float('inf'),
                                     **kwargs):
@@ -1190,22 +1261,16 @@ def calc_multiple_exps_measurements(main_exp_dir_full_path: str,
     visualize_flag = kwargs.get('visualize_flag', False)
     visualize_each_exp_flag = kwargs.get('visualize_each_exp_flag', False)
     treatments_to_include = kwargs.get('treatments_to_include', 'all')
-    use_log_flag = kwargs.get('use_log', USE_LOG)
     meta_data_file_full_path = kwargs.get('metadata_file_full_path', METADATA_FILE_FULL_PATH)
     compressed_flag = kwargs.get('use_compressed_exps_data_flag', False)
     neighbors_threshold_dist = kwargs.get('neighbors_threshold_dist', DIST_THRESHOLD_IN_PIXELS)
     use_sliding_time_window = kwargs.get('use_sliding_time_window', False)
+    type_of_measurement = kwargs.get('type_of_measurement', 'adjacent_death_time_difference')
+    fig_name_suffix = kwargs.get('fig_name_suffix', '')
+
     if use_sliding_time_window:
         sliding_time_window_size_in_min = kwargs.get('sliding_time_window_size_in_min', 100)
-        type_of_measurement = 'fraction_of_adjacent_death'
-    else:
-        type_of_measurement = kwargs.get('type_of_measurement', 'adjacent_death_time_difference')
-        bins_of_adjacent_death_diff = kwargs.get('bins_of_adjacent_death_diff', None)
-    #####
-
-    # # LOG FILE: clean and write headline
-    # with open('../experiments_with_bad_results.txt', 'w') as f:
-    #     f.write(f'analyzed directory path:{main_exp_dir_full_path}\nExperiments with P(Nuc)+P(Prop)<1 : \n')
+        fig_name_suffix = 'in_sliding_time_window'
 
     if main_exp_dir_full_path is None:
         main_exp_dir_full_path = os.sep.join(
@@ -1257,6 +1322,15 @@ def calc_multiple_exps_measurements(main_exp_dir_full_path: str,
                 exp_treatment=exp_treatment,
                 exp_name=exp_name,
                 **single_exp_kwargs)
+        elif type_of_measurement == 'adjacent_death_time_variance':
+            total_adjacent_death_time_diffs_hist, measurement_endpoint_readout = calc_adjacent_death_variance_in_single_experiment(
+                cells_neighbors=cells_neighbors_lvl1,
+                cells_times_of_death=cells_times_of_death,
+                exp_temporal_resolution=explicit_temporal_resolution,
+                exp_name=exp_name,
+                exp_treatment=exp_treatment,
+                **single_exp_kwargs
+            )
         elif type_of_measurement == 'adjacent_death_time_difference':
             total_adjacent_death_time_diffs_hist, measurement_endpoint_readout = calc_time_difference_of_adjacent_death_in_single_experiment(
                 cells_neighbors=cells_neighbors_lvl1,
@@ -1284,7 +1358,8 @@ def calc_multiple_exps_measurements(main_exp_dir_full_path: str,
                                             x_label='Treatment',
                                             y_label=f'{type_of_measurement.capitalize()} Readout',
                                             dir_to_save_fig_full_path=path_for_fig,
-                                            measurement_type=type_of_measurement)
+                                            measurement_type=type_of_measurement,
+                                            fig_name_suffix=fig_name_suffix)
 
 
 if __name__ == '__main__':
@@ -1392,15 +1467,26 @@ if __name__ == '__main__':
     #                                 visualize_each_exp_flag=True
     #                                 )
 
-    # time of death variance between adjacent cells
+    # time of death variance between adjacent cells in sliding time windows
+    # dir_path = os.sep.join(os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV', 'OriginalTimeMinutesData'])
+    # calc_multiple_exps_measurements(main_exp_dir_full_path=dir_path,
+    #                                 limit_exp_num=float('inf'),
+    #                                 use_sliding_time_window=True,
+    #                                 sliding_time_window_size_in_min=100,
+    #                                 type_of_measurement='adjacent_death_time_variance',
+    #                                 # bins_of_adjacent_death_diff=np.arange(-10, 10, 1),
+    #                                 treatments_to_include=['superkiller', 'fac', 'erastin', 'simulation'],
+    #                                 visualize_flag=True,
+    #                                 visualize_each_exp_flag=False
+    #                                 )
+
+    # time of death variance between adjacent cells in an entire experiment
     dir_path = os.sep.join(os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV', 'OriginalTimeMinutesData'])
     calc_multiple_exps_measurements(main_exp_dir_full_path=dir_path,
                                     limit_exp_num=float('inf'),
-                                    use_sliding_time_window=True,
-                                    sliding_time_window_size_in_min=100,
+                                    use_sliding_time_window=False,
                                     type_of_measurement='adjacent_death_time_variance',
-                                    # bins_of_adjacent_death_diff=np.arange(-10, 10, 1),
                                     treatments_to_include=['superkiller', 'fac', 'erastin', 'simulation'],
                                     visualize_flag=True,
-                                    visualize_each_exp_flag=True
+                                    visualize_each_exp_flag=False
                                     )
