@@ -93,6 +93,27 @@ def load_dict_from_json(path: str):
     return dict_to_load
 
 
+def add_values_to_json(path: str, kwargs_to_add: Dict[str, Any]):
+    """
+    Adds all key and values of kwargs_to_add dictionary to the json file @ path
+    :param kwargs_to_add: dictionary
+    :param path: str, full path to json file
+    :return:
+    """
+    try:
+        current_json_dict = None
+        with open(path, 'r') as f:
+            current_json_dict = json.load(f)
+    except FileNotFoundError as e:
+        print(f'problem loading the configuration file at {path}\nEXCEPTION CLAUSE:\n{e}')
+    try:
+        with open(path, 'w') as f:
+            current_json_dict.update(kwargs_to_add)
+            json.dump(current_json_dict, f)
+    except Exception as e:
+        print(f'problem writing the configuration file at {path}\nEXCEPTION CLAUSE:\n{e}')
+
+
 def write_dict_as_json(path: str, dict_to_write: dict):
     """
 
