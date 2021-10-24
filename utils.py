@@ -256,7 +256,7 @@ def get_linear_regression_line_between_two_signals(x: np.array, y: np.array) -> 
     return x_new, y_new
 
 
-def get_cells_neighbors(XY, threshold_dist: Union[int, float] = None):
+def get_cells_neighbors(XY, threshold_dist: Union[int, float] = None) ->Tuple[List[int], List[int], List[int]]:
     """
     returns 3 levels of topological neighbors for each cell.
     if threshold_dist is not None, a distance constraint is employed on the neighbors to prevent neighbors that are

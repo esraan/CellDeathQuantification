@@ -3,10 +3,10 @@ import os
 # todo: add explanation to all global parameters
 
 
-SHOWFIG = False
+SHOWFIG = True
 SAVEFIG = not SHOWFIG
 
-RECENT_DEATH_ONLY_FLAG = True
+RECENT_DEATH_ONLY_FLAG = False
 
 WINDOW_SIZE = 5
 

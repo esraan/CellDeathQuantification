@@ -657,6 +657,8 @@ def visualize_histogram_of_values(
     ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
 
+    plt.tight_layout()
+
     if SHOWFIG:
         plt.show()
     elif SAVEFIG:
