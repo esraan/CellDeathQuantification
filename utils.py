@@ -3,7 +3,8 @@ from typing import *
 import numpy as np
 import pandas as pd
 from scipy.spatial import Voronoi
-from scipy.stats import linregress, zscore
+from scipy.stats import linregress, zscore, pearsonr
+from scipy.signal import correlate
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error as mse
 from sklearn.metrics.pairwise import euclidean_distances as euc_dis
@@ -277,7 +278,7 @@ def get_linear_regression_line_between_two_signals(x: np.array, y: np.array) -> 
     return x_new, y_new
 
 
-def get_cells_neighbors(XY, threshold_dist: Union[int, float] = None) ->Tuple[List[int], List[int], List[int]]:
+def get_cells_neighbors(XY, threshold_dist: Union[int, float] = None) -> Tuple[List[int], List[int], List[int]]:
     """
     returns 3 levels of topological neighbors for each cell.
     if threshold_dist is not None, a distance constraint is employed on the neighbors to prevent neighbors that are
@@ -455,7 +456,7 @@ def clean_string_from_bad_chars(treatment_name: str, replacement='_') -> str:
     return treatment_name.replace('\\', replacement).replace('/', replacement)
 
 
-def normalize(values: np.array, normalization_method:str = 'z_score', axis: int = 0):
+def normalize(values: np.array, normalization_method: str = 'z_score', axis: int = 0):
     if normalization_method == 'z_score':
         return zscore(values, axis=axis)
     Warning('the normalization method is unknown!')
@@ -479,3 +480,43 @@ def get_dead_cells_mask_in_window(window_start_time_min: int,
         return (cells_times_of_death >= window_start_time_min) * (cells_times_of_death < window_end_time_min)
     else:
         return cells_times_of_death < window_end_time_min
+
+
+def verify_any_str_from_lst_in_specific_str(str_to_verify: str, lst_of_strings: List[str]) -> bool:
+    """
+    checks if any string from a list of strings appears in another string.
+    Used to check whether any of a list of shortened/lazy versions of treatments' names appear in a treatment full name.
+    The purpose of this function is to skip un-wanted treatments.
+    :param str_to_verify: str, the full string we we like to find instances of at least one of the strings in lst_of_strings
+    :param lst_of_strings: List[str], a list of shortened versions of strings.
+    :return: boolean
+    """
+    return sum(
+        [treatment_shortname.lower() in str_to_verify.lower() for treatment_shortname in lst_of_strings]) == 0
+
+
+def calc_correlation(x: np.array, y: np.array, type_of_correlation: str = None,
+                     print_p_val: bool = True, **kwargs) -> Union[float, np.array]:
+    """
+    default is pearson correlation (if type_of_correlation argument is None)
+    :param x: np.array
+    :param y: np.array
+    :param type_of_correlation: str
+    :param print_p_val: bool
+    :param kwargs: any kwargs for correlation functions of scipy
+    :return:
+    """
+    p_val = None
+
+    if type_of_correlation == 'discrete_correlation':
+        correlation = correlate(x, y,
+                                mode=kwargs.get('correlate_mode', 'full'),
+                                method=kwargs.get('correlate_method', 'auto'))
+    else:
+        Warning('Pearson correlation assumes normal distribution of x and y')
+        correlation, p_val = pearsonr(x, y)
+
+    if print_p_val:
+        print(f'p value of {type_of_correlation}={p_val}')
+
+    return correlation

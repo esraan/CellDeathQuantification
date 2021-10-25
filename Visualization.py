@@ -173,11 +173,17 @@ def visualize_endpoint_readouts_by_treatment_about_readouts(x_readout: np.array,
                                                             full_path_to_save_fig: str = None,
                                                             x_label: str = 'Fraction of Nucleators',
                                                             y_label: str = 'Fraction of Propagators',
+                                                            fig_title: str = 'Fraction of Nucleators & Propagators',
+                                                            fig_name_to_save: str = None,
                                                             use_log: bool = False,
                                                             plot_about_treatment: bool = False,
                                                             **kwargs):
     set_y_lim = kwargs.get('set_y_lim', True)
+    show_legend = kwargs.get('show_legend', False)
+    legend_font_size = kwargs.get('legend_font_size', 6)
+    legend_marker_ration = kwargs.get('legend_marker_ration', 0.8)
     recent_death_flag = kwargs.get('only_recent_death_flag_for_neighbors_calc', RECENT_DEATH_ONLY_FLAG)
+
     if use_log:
         x_readout = np.log10(x_readout)
         y_readout = np.log10(y_readout)
@@ -208,9 +214,6 @@ def visualize_endpoint_readouts_by_treatment_about_readouts(x_readout: np.array,
         else:
             ax.plot(x, y, ms=marker_size, marker=marker,
                     color=color, label=treatment_per_readout[point_idx])
-
-    custom_handles, custom_lables = get_custom_legend_artists(labels_to_colors=treatment_to_color,
-                                                              labels_to_markers=treatment_to_marker)
 
     if plot_about_treatment:
         # temporal_unit = 'Minutes' if temporal_resolution != 1 else 'Frame#'
@@ -262,7 +265,7 @@ def visualize_endpoint_readouts_by_treatment_about_readouts(x_readout: np.array,
         ax.grid('on')
         ax.set_xlabel('Log ' + x_label if use_log else x_label)
         ax.set_ylabel('Log ' + y_label if use_log else y_label)
-        ax.set_title('Log(Fraction) of Nucleators & Propagators' if use_log else 'Fraction of Nucleators & Propagators')
+        ax.set_title(fig_title if not use_log else f'Log of {fig_title}')
         if not use_log:
             x_tick_limits = [0.1, .30]
             y_tick_limits = [0.6, 0.95]
@@ -272,6 +275,24 @@ def visualize_endpoint_readouts_by_treatment_about_readouts(x_readout: np.array,
         if set_y_lim:
             ax.set_xlim(x_tick_limits)
             ax.set_ylim(y_tick_limits)
+
+    if show_legend:
+        # filter treatments colors and markers to show only computed treatments in legend
+        filtered_treatment_to_color = {}
+        filtered_treatment_to_marker = {}
+        for key, val in treatment_to_color.items():
+            if key in treatment_per_readout:
+                filtered_treatment_to_color[key] = val
+                filtered_treatment_to_marker[key] = treatment_to_marker[key]
+
+        custom_handles, custom_lables = get_custom_legend_artists(labels_to_colors=filtered_treatment_to_color,
+                                                                  labels_to_markers=filtered_treatment_to_marker)
+
+        plt.legend(handles=custom_handles,
+                   labels=custom_lables,
+                   loc='best',
+                   fontsize=legend_font_size,
+                   markerscale=legend_marker_ration)
 
     plt.tight_layout()
 
@@ -291,11 +312,15 @@ def visualize_endpoint_readouts_by_treatment_about_readouts(x_readout: np.array,
         if not os.path.isdir(path_for_plot_dir):
             os.makedirs(path_for_plot_dir)
 
-        plot_about_time_path_addition = '_about_treatment' if plot_about_treatment else ''
-        if use_log:
-            path_for_plot = os.sep.join([path_for_plot_dir, f'LOG_global_p_nuc_vs_p_prop_all_exps{plot_about_time_path_addition}'])
+        if fig_name_to_save is None:
+            plot_about_time_path_addition = '_about_treatment' if plot_about_treatment else ''
+            if use_log:
+                path_for_plot = os.sep.join([path_for_plot_dir, f'LOG_global_p_nuc_vs_p_prop_all_exps{plot_about_time_path_addition}'])
+            else:
+                path_for_plot = os.sep.join([path_for_plot_dir, f'global_p_nuc_vs_p_prop_all_exps{plot_about_time_path_addition}'])
         else:
-            path_for_plot = os.sep.join([path_for_plot_dir, f'global_p_nuc_vs_p_prop_all_exps{plot_about_time_path_addition}'])
+            path_for_plot = os.sep.join([path_for_plot_dir, fig_name_to_save])
+
         path_for_plot = path_for_plot if full_path_to_save_fig is None else full_path_to_save_fig
         plt.savefig(path_for_plot + '.png', dpi=200)  # , bbox_extra_artists=[lgd], bbox_inches='tight')
         plt.savefig(path_for_plot + '.eps', dpi=200)  # , bbox_extra_artists=[lgd], bbox_inches='tight')

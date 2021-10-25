@@ -8,6 +8,7 @@ from enum import IntEnum, unique
 from utils import *
 from global_parameters import *
 from Visualization import *
+from SPICalculator import SPICalculator as spiCalc
 
 
 @unique
@@ -449,6 +450,9 @@ def calc_and_visualize_all_experiments_csvs_in_dir(dir_path: str = None,
     """
     only_recent_death_flag_for_neighbors_calc = kwargs.get('only_recent_death_flag_for_neighbors_calc',
                                                            RECENT_DEATH_ONLY_FLAG)
+    treatments_to_include = kwargs.get('treatments_to_include', 'all')
+
+    single_exp_visualize_flag = kwargs.get('visualize_each_exp_flag', False)
 
     visualize_flag = kwargs.get('visualize_flag', True)
 
@@ -488,6 +492,11 @@ def calc_and_visualize_all_experiments_csvs_in_dir(dir_path: str = None,
             exp_file_name=exp_name + '.csv', meta_data_file_full_path=meta_data_file_path,
             compressed_flag=compressed_flag)
 
+        # skip un-wanted treatments
+        if treatments_to_include != 'all' and \
+                verify_any_str_from_lst_in_specific_str(exp_treatment, treatments_to_include):
+            continue
+
         p_nuc_by_time, p_prop_by_time, p_nuc_global, p_prop_global, \
         all_frames_nucleators_mask, all_frames_propagators_mask, \
         accumulated_fraction_of_death_by_time = \
@@ -504,7 +513,7 @@ def calc_and_visualize_all_experiments_csvs_in_dir(dir_path: str = None,
             with open('../experiments_with_bad_results.txt', 'a') as f:
                 f.write(f'exp:{exp_name}| pnuc={p_nuc_global}, pprop={p_prop_global}\n')
 
-        if visualize_flag:
+        if single_exp_visualize_flag:
             visualize_cell_death_in_time(xyt_full_path=file_full_path,
                                          nucleators_mask=all_frames_nucleators_mask,
                                          propagators_maks=all_frames_propagators_mask,
@@ -1225,7 +1234,7 @@ def calc_adjacent_death_variance_in_single_experiment(cells_neighbors: np.array,
                 adjacent_death_variance_in_curr_time.append(dead_cell_neighbors_death_times_variance)
 
             examined_cells_indices.update([curr_dead_cell_idx])
-        if len(adjacent_death_variance_in_curr_time)>0:
+        if len(adjacent_death_variance_in_curr_time) > 0:
             mean_variance_of_adjacent_death_in_curr_time = np.array(adjacent_death_variance_in_curr_time).mean()
         else:
             mean_variance_of_adjacent_death_in_curr_time = 0
@@ -1296,14 +1305,14 @@ def calc_multiple_exps_measurements(main_exp_dir_full_path: str,
                                                            meta_data_file_full_path=meta_data_file_full_path,
                                                            compressed_flag=compressed_flag)
         # skip un-wanted treatments
-        if treatments_to_include != 'all' and sum(
-                [treatment_shortname in exp_treatment.lower() for treatment_shortname in treatments_to_include]) == 0:
+        if treatments_to_include != 'all' and \
+                verify_any_str_from_lst_in_specific_str(exp_treatment, treatments_to_include):
             continue
 
         all_exps_names.append(exp_name)
         all_exps_treatments.append(exp_treatment)
 
-        print(f'analyzing exp {exp_name} | {exp_idx + 1}/{total_exps}')
+        print(f'Calculating {type_of_measurement} for experiment: {exp_name} | Progress: {exp_idx + 1}/{total_exps}')
         exp_df = pd.read_csv(single_exp_full_path)
         cells_xy, cells_times_of_death = exp_df.loc[:, ['cell_x', 'cell_y']].values, exp_df.loc[:,
                                                                                      ['death_time']].values
@@ -1339,6 +1348,14 @@ def calc_multiple_exps_measurements(main_exp_dir_full_path: str,
                 exp_treatment=exp_treatment,
                 **single_exp_kwargs
             )
+        elif type_of_measurement.lower() == 'spi':
+            cells_loci, cells_times_of_death = read_experiment_cell_xy_and_death_times(
+                exp_full_path=single_exp_full_path)
+            single_exp_spi_calculator = spiCalc(XY=cells_loci,
+                                                die_times=cells_times_of_death,
+                                                treatment=exp_treatment,
+                                                temporal_resolution=explicit_temporal_resolution)
+            measurement_endpoint_readout = single_exp_spi_calculator.get_spis()
 
         all_endpoint_readouts_by_experiment.append(measurement_endpoint_readout)
 
@@ -1360,6 +1377,83 @@ def calc_multiple_exps_measurements(main_exp_dir_full_path: str,
                                             dir_to_save_fig_full_path=path_for_fig,
                                             measurement_type=type_of_measurement,
                                             fig_name_suffix=fig_name_suffix)
+
+        return all_endpoint_readouts_by_experiment, all_exps_treatments
+
+
+def calc_pnuc_vs_measurement_for_all_experiments(main_exp_dir_full_path: str,
+                                                 limit_exp_num: int = float('inf'),
+                                                 **kwargs):
+    visualize_flag = kwargs.get('visualize_flag', True)
+    full_dir_path_to_save_fig = kwargs.get('full_dir_path_to_save_fig', None)
+    measurement_type = kwargs.get('type_of_measurement', 'adjacent_death_time_difference')
+
+    # for readability, explicitly provide measurement type
+    kwargs.pop('type_of_measurement')
+
+    # None P(Nuc) measurement calculation
+    all_measurement_endpoint_readouts_by_experiment, all_measurements_exps_treatments = calc_multiple_exps_measurements(
+        main_exp_dir_full_path,
+        limit_exp_num,
+        type_of_measurement=measurement_type,
+        **kwargs
+    )
+    # P Nuc calculation
+    all_global_p_nuc, \
+    all_global_p_prop, \
+    all_p_nuc_treatment_types = calc_and_visualize_all_experiments_csvs_in_dir(
+        dir_path=main_exp_dir_full_path,
+        limit_exp_num=limit_exp_num,
+        **kwargs
+    )
+
+    # SPI calculation
+    all_spi_readouts_by_experiment, all_spi_exps_treatments = calc_multiple_exps_measurements(
+        main_exp_dir_full_path,
+        limit_exp_num,
+        type_of_measurement='spi',
+        **kwargs
+    )
+
+    if (all_p_nuc_treatment_types != all_measurements_exps_treatments).all():
+        raise RuntimeError('calculation of measurement and p nuc are not aligned, sort by exp name!')
+
+    if (all_spi_exps_treatments != all_p_nuc_treatment_types).all():
+        raise RuntimeError('calculation of spi and p nuc are not aligned, sort by exp name!')
+
+
+    spi_and_measurement_correlation = calc_correlation(all_measurement_endpoint_readouts_by_experiment, all_spi_readouts_by_experiment)
+
+    print(f'Correlation between SPI and {measurement_type} is: {spi_and_measurement_correlation}')
+    if visualize_flag:
+        full_dir_path_to_save_fig = os.sep.join(
+            [RESULTS_MAIN_DIR, 'MeasurementsEndpointReadoutsPlots', 'ComparisonBetweenMeasurements']) if full_dir_path_to_save_fig is None else full_dir_path_to_save_fig
+
+        visualize_endpoint_readouts_by_treatment_about_readouts(x_readout=all_global_p_nuc,
+                                                                y_readout=all_measurement_endpoint_readouts_by_experiment,
+                                                                treatment_per_readout=all_p_nuc_treatment_types,
+                                                                full_dir_path_to_save_fig=full_dir_path_to_save_fig,
+                                                                x_label=f'Fraction of Nucleators',
+                                                                y_label=measurement_type,
+                                                                fig_title=f'Fraction of Nucleators about\n {measurement_type}',
+                                                                use_log=False,
+                                                                set_y_lim=False,
+                                                                show_legend=True,
+                                                                fig_name_to_save=f'fraction_of_nuc_about_{measurement_type}',
+                                                                **kwargs)
+
+        visualize_endpoint_readouts_by_treatment_about_readouts(x_readout=all_global_p_nuc,
+                                                                y_readout=all_spi_readouts_by_experiment,
+                                                                treatment_per_readout=all_p_nuc_treatment_types,
+                                                                full_dir_path_to_save_fig=full_dir_path_to_save_fig,
+                                                                x_label='Fraction of Nucleators',
+                                                                y_label='SPI',
+                                                                fig_title=f'Fraction of Nucleators about\n {"SPI"}',
+                                                                use_log=False,
+                                                                set_y_lim=False,
+                                                                show_legend=True,
+                                                                fig_name_to_save=f'fraction_of_nuc_about_{"SPI"}',
+                                                                **kwargs)
 
 
 if __name__ == '__main__':
@@ -1481,12 +1575,23 @@ if __name__ == '__main__':
     #                                 )
 
     # time of death variance between adjacent cells in an entire experiment
+    # dir_path = os.sep.join(os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV', 'OriginalTimeMinutesData'])
+    # calc_multiple_exps_measurements(main_exp_dir_full_path=dir_path,
+    #                                 limit_exp_num=float('inf'),
+    #                                 use_sliding_time_window=False,
+    #                                 type_of_measurement='adjacent_death_time_variance',
+    #                                 treatments_to_include=['superkiller', 'fac', 'erastin', 'simulation'],
+    #                                 visualize_flag=True,
+    #                                 visualize_each_exp_flag=False)
+
+    # p_nuc about adjacent death time difference measurement
     dir_path = os.sep.join(os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV', 'OriginalTimeMinutesData'])
-    calc_multiple_exps_measurements(main_exp_dir_full_path=dir_path,
-                                    limit_exp_num=float('inf'),
-                                    use_sliding_time_window=False,
-                                    type_of_measurement='adjacent_death_time_variance',
-                                    treatments_to_include=['superkiller', 'fac', 'erastin', 'simulation'],
-                                    visualize_flag=True,
-                                    visualize_each_exp_flag=False
-                                    )
+    calc_pnuc_vs_measurement_for_all_experiments(main_exp_dir_full_path=dir_path,
+                                                 limit_exp_num=float('inf'),
+                                                 use_sliding_time_window=False,
+                                                 type_of_measurement='adjacent_death_time_difference',
+                                                 bins_of_adjacent_death_diff=np.arange(0, 4, 0.5),
+                                                 treatments_to_include=['superkiller', 'dots', 'h2O2', 'erastin'],
+                                                 visualize_flag=True,
+                                                 visualize_each_exp_flag=False
+                                                 )
