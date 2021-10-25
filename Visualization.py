@@ -215,6 +215,8 @@ def visualize_endpoint_readouts_by_treatment_about_readouts(x_readout: np.array,
             ax.plot(x, y, ms=marker_size, marker=marker,
                     color=color, label=treatment_per_readout[point_idx])
 
+            ax.set_ylim([0, 1])
+
     if plot_about_treatment:
         # temporal_unit = 'Minutes' if temporal_resolution != 1 else 'Frame#'
         axis[0].grid('on')

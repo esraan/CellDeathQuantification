@@ -1591,7 +1591,7 @@ if __name__ == '__main__':
                                                  use_sliding_time_window=False,
                                                  type_of_measurement='adjacent_death_time_difference',
                                                  bins_of_adjacent_death_diff=np.arange(0, 4, 0.5),
-                                                 treatments_to_include=['fac', 'superkiller', 'dots', 'h2O2', 'erastin'],
+                                                 treatments_to_include=['fac&bso'],#['fac&bso', 'h2O2'], #['superkiller', 'dots', 'h2O2', 'erastin'],
                                                  visualize_flag=True,
                                                  visualize_each_exp_flag=False
                                                  )
