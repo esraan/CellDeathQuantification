@@ -1290,7 +1290,7 @@ def calc_multiple_exps_measurements(main_exp_dir_full_path: str,
 
     total_exps = len(all_files_to_analyze_only_exp_names)
 
-    all_endpoint_readouts_by_experiment, all_exps_names, all_exps_treatments = list(), list(), list()
+    all_endpoint_readouts_by_experiment, all_exps_names, all_exps_treatments, all_exps_densities = list(), list(), list(), list()
 
     single_exp_kwargs = kwargs.copy()
     single_exp_kwargs['visualize_flag'] = visualize_each_exp_flag
@@ -1300,10 +1300,12 @@ def calc_multiple_exps_measurements(main_exp_dir_full_path: str,
 
         exp_name = all_files_to_analyze_only_exp_names[exp_idx]
 
-        exp_treatment, explicit_temporal_resolution = \
+        exp_treatment, explicit_temporal_resolution, exp_density = \
             get_exp_treatment_type_and_temporal_resolution(exp_file_name=single_exp_full_path.split(os.sep)[-1],
                                                            meta_data_file_full_path=meta_data_file_full_path,
-                                                           compressed_flag=compressed_flag)
+                                                           compressed_flag=compressed_flag,
+                                                           get_exp_density=True)
+
         # skip un-wanted treatments
         if treatments_to_include != 'all' and \
                 verify_any_str_from_lst_in_specific_str(exp_treatment, treatments_to_include):
@@ -1311,6 +1313,7 @@ def calc_multiple_exps_measurements(main_exp_dir_full_path: str,
 
         all_exps_names.append(exp_name)
         all_exps_treatments.append(exp_treatment)
+        all_exps_densities.append(exp_density)
 
         print(f'Calculating {type_of_measurement} for experiment: {exp_name} | Progress: {exp_idx + 1}/{total_exps}')
         exp_df = pd.read_csv(single_exp_full_path)
@@ -1378,7 +1381,7 @@ def calc_multiple_exps_measurements(main_exp_dir_full_path: str,
                                             measurement_type=type_of_measurement,
                                             fig_name_suffix=fig_name_suffix)
 
-        return all_endpoint_readouts_by_experiment, all_exps_treatments
+        return all_endpoint_readouts_by_experiment, all_exps_treatments, all_exps_densities
 
 
 def calc_pnuc_vs_measurement_for_all_experiments(main_exp_dir_full_path: str,
@@ -1392,7 +1395,7 @@ def calc_pnuc_vs_measurement_for_all_experiments(main_exp_dir_full_path: str,
     kwargs.pop('type_of_measurement')
 
     # None P(Nuc) measurement calculation
-    all_measurement_endpoint_readouts_by_experiment, all_measurements_exps_treatments = calc_multiple_exps_measurements(
+    all_measurement_endpoint_readouts_by_experiment, all_measurements_exps_treatments, exp_densities = calc_multiple_exps_measurements(
         main_exp_dir_full_path,
         limit_exp_num,
         type_of_measurement=measurement_type,
@@ -1408,7 +1411,7 @@ def calc_pnuc_vs_measurement_for_all_experiments(main_exp_dir_full_path: str,
     )
 
     # SPI calculation
-    all_spi_readouts_by_experiment, all_spi_exps_treatments = calc_multiple_exps_measurements(
+    all_spi_readouts_by_experiment, all_spi_exps_treatments, exp_densities = calc_multiple_exps_measurements(
         main_exp_dir_full_path,
         limit_exp_num,
         type_of_measurement='spi',
@@ -1421,13 +1424,25 @@ def calc_pnuc_vs_measurement_for_all_experiments(main_exp_dir_full_path: str,
     if (all_spi_exps_treatments != all_p_nuc_treatment_types).all():
         raise RuntimeError('calculation of spi and p nuc are not aligned, sort by exp name!')
 
+    spi_and_measurement_correlation = calc_correlation(all_measurement_endpoint_readouts_by_experiment,
+                                                       all_spi_readouts_by_experiment)
 
-    spi_and_measurement_correlation = calc_correlation(all_measurement_endpoint_readouts_by_experiment, all_spi_readouts_by_experiment)
+    p_nuc_and_measurement_correlation = calc_correlation(all_measurement_endpoint_readouts_by_experiment,
+                                                       all_global_p_nuc)
+
+    p_nuc_and_spi_correlation = calc_correlation(all_global_p_nuc,
+                                                       all_spi_readouts_by_experiment)
+
+    normalized_exp_densities = normalize(values=exp_densities, normalization_method='min_max')
 
     print(f'Correlation between SPI and {measurement_type} is: {spi_and_measurement_correlation}')
+    print(f'Correlation between P(Nuc) and {measurement_type} is: {p_nuc_and_measurement_correlation}')
+    print(f'Correlation between P(Nuc) and {"SPI"} is: {p_nuc_and_spi_correlation}')
+
     if visualize_flag:
         full_dir_path_to_save_fig = os.sep.join(
-            [RESULTS_MAIN_DIR, 'MeasurementsEndpointReadoutsPlots', 'ComparisonBetweenMeasurements']) if full_dir_path_to_save_fig is None else full_dir_path_to_save_fig
+            [RESULTS_MAIN_DIR, 'MeasurementsEndpointReadoutsPlots',
+             'ComparisonBetweenMeasurements']) if full_dir_path_to_save_fig is None else full_dir_path_to_save_fig
 
         visualize_endpoint_readouts_by_treatment_about_readouts(x_readout=all_global_p_nuc,
                                                                 y_readout=all_measurement_endpoint_readouts_by_experiment,
@@ -1435,7 +1450,7 @@ def calc_pnuc_vs_measurement_for_all_experiments(main_exp_dir_full_path: str,
                                                                 full_dir_path_to_save_fig=full_dir_path_to_save_fig,
                                                                 x_label=f'Fraction of Nucleators',
                                                                 y_label=measurement_type,
-                                                                fig_title=f'Fraction of Nucleators about\n {measurement_type}',
+                                                                fig_title=f'Fraction of Nucleators about\n {measurement_type}\ncorrelation:{p_nuc_and_measurement_correlation}',
                                                                 use_log=False,
                                                                 set_y_lim=False,
                                                                 show_legend=True,
@@ -1448,150 +1463,216 @@ def calc_pnuc_vs_measurement_for_all_experiments(main_exp_dir_full_path: str,
                                                                 full_dir_path_to_save_fig=full_dir_path_to_save_fig,
                                                                 x_label='Fraction of Nucleators',
                                                                 y_label='SPI',
-                                                                fig_title=f'Fraction of Nucleators about\n {"SPI"}',
+                                                                fig_title=f'Fraction of Nucleators about\n {"SPI"}correlation:{spi_and_measurement_correlation}',
                                                                 use_log=False,
                                                                 set_y_lim=False,
                                                                 show_legend=True,
                                                                 fig_name_to_save=f'fraction_of_nuc_about_{"SPI"}',
                                                                 **kwargs)
+        # visualize_endpoint_readouts_by_treatment_about_readouts_3d(z_readout=all_global_p_nuc,
+        #                                                            x_readout=1-np.array(all_measurement_endpoint_readouts_by_experiment),
+        #                                                            y_readout=normalized_exp_densities,
+        #                                                            treatment_per_readout=all_p_nuc_treatment_types,
+        #                                                            full_dir_path_to_save_fig=full_dir_path_to_save_fig,
+        #                                                            z_label=f'Fraction of Nucleators',
+        #                                                            x_label=f'1-{measurement_type}',
+        #                                                            y_label='Density',
+        #                                                            fig_title=f'Fraction of Nucleators about\n {measurement_type}',
+        #                                                            show_legend=True,
+        #                                                            fig_name_to_save=f'fraction_of_nuc_about_{measurement_type}',
+        #                                                            **kwargs)
+        #
+        # visualize_endpoint_readouts_by_treatment_about_readouts_3d(z_readout=all_global_p_nuc,
+        #                                                            x_readout=all_spi_readouts_by_experiment,
+        #                                                            y_readout=normalized_exp_densities,
+        #                                                            treatment_per_readout=all_p_nuc_treatment_types,
+        #                                                            full_dir_path_to_save_fig=full_dir_path_to_save_fig,
+        #                                                            z_label='Fraction of Nucleators',
+        #                                                            x_label='SPI',
+        #                                                            y_label='Density',
+        #                                                            fig_title=f'Fraction of Nucleators about\n {"SPI"}',
+        #                                                            show_legend=True,
+        #                                                            fig_name_to_save=f'fraction_of_nuc_about_{"SPI"}',
+        #                                                            **kwargs)
 
+
+def calculate_local_cell_density_single_experiment(cells_xy: pd.DataFrame, cells_neighbors: List[List[int]], type_of_density: str = 'vanilla') -> Tuple[float, np.array]:
+    """
+    possible types of density calculations for cell i:
+        vanilla - the fraction of cells neighboring cell i of all cells in the experiment
+        distance_density - the averaged normalized distance of cell i's all neighboring cells
+    :param cells_xy:
+    :param cells_neighbors:
+    :param type_of_density:
+    :return:
+    """
+    total_number_of_cells = len(cells_xy)
+    normalized_cell_loci = np.vstack((normalize(cells_xy[:, 0]), normalize(cells_xy[:, 1])))
+
+    all_cells_densities = np.zeros_like(cells_xy[:, 0])
+
+    for cell_idx, cell_loci in enumerate(cells_xy):
+        cell_neighbors_lst = cells_neighbors[cell_idx]
+        if len(cell_neighbors_lst) == 0 :
+            continue
+        cell_density = None
+        if type_of_density == 'vanilla':
+            cell_density = len(cell_neighbors_lst) / total_number_of_cells
+        elif type_of_density == 'distance_density':
+            all_neighboring_cells_loci = normalized_cell_loci[:, tuple(cell_neighbors_lst)]
+            cell_accumulated_neighbors_distance = 0
+            for neighbor_loci in all_neighboring_cells_loci.T:
+                cell_accumulated_neighbors_distance += get_euclidean_distance_between_cells_in_pixels(normalized_cell_loci[:, cell_idx], neighbor_loci)
+            cell_avg_density = cell_accumulated_neighbors_distance/len(all_neighboring_cells_loci)
+        all_cells_densities[cell_idx] = cell_avg_density
+    average_density = all_cells_densities.mean()
+    return average_density, all_cells_densities
+
+
+# if __name__ == '__main__':
+#     # recent dead only flag
+#     # calc_rmse_between_experiments_results_of_altering_flag_values(dir_path=os.sep.join(
+#     #     os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV',
+#     #                                       'OriginalTimeMinutesData']))  #, limit_exp_num=10)
+#     # compression flag
+#     # calc_rmse_between_experiments_results_of_altering_flag_values(flag_key='dir_path',
+#     #                                                               flag_values=(os.sep.join(
+#     #                                                                   os.getcwd().split(os.sep)[:-1] + ['Data',
+#     #                                                                                                     'Experiments_XYT_CSV',
+#     #                                                                                                     'OriginalTimeMinutesData']),
+#     #                                                                            os.sep.join(
+#     #                                                                                os.getcwd().split(os.sep)[:-1] + [
+#     #                                                                                    'Data', 'Experiments_XYT_CSV',
+#     #                                                                                    'CompressedTime_XYT_CSV'])))
+#     # compression flag
+#     # calc_and_visualize_all_experiments_csvs_in_dir_with_altering_flag_values(flag_key='dir_path',
+#     #                                                                          flag_values=(os.sep.join(
+#     #     os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV',
+#     #                                       'OriginalTimeMinutesData']), os.sep.join(
+#     #     os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV',
+#     #                                       'CompressedTime_XYT_CSV'])))
+#     #
+#     # MULTIPLE EXPERIMENTS
+#     # calc_and_visualize_all_experiments_csvs_in_dir(limit_exp_num=float('inf'),
+#     #                                                dir_path=os.sep.join(
+#     #                                                    os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV',
+#     #                                                                                      'OriginalTimeMinutesData']))
+#
+#     # # single experiment testing
+#     # path = '..\\Data\\Experiments_XYT_CSV\\CompressedTime_XYT_CSV\\20160909_b16f10_aMSH_xy37.csv'
+#     # p_nuc_by_time, p_prop_by_time, p_nuc_global, p_prop_global, \
+#     # all_frames_nucleators_mask, all_frames_propagators_mask,\
+#     #     accumulated_fraction_of_death_by_time = calc_single_experiment_temporal_p_nuc_and_p_prop_and_endpoint_readouts(single_exp_full_path=path)
+#     #
+#     # visualize_cell_death_in_time(xyt_full_path=path, nucleators_mask=all_frames_nucleators_mask, exp_treatment='just_treatment', exp_name='just name')
+#     #
+#     # plot_measurements_by_time(p_nuc_by_time, p_prop_by_time, accumulated_fraction_of_death_by_time,
+#     #                           temporal_resolution=15, exp_name='20180620_HAP1_erastin_xy1', exp_treatment='test_treat')
+#
+#     # plot kl-divergence between recent death only flags endpoint readouts
+#     # kwargs = dict()
+#     # kwargs['distance_metric'] = 'kl_divergence'
+#     # kwargs['visualize_flag'] = True
+#     # kwargs['visualize_specific_treatments'] = ['tnf', 'erastin', 'trail']
+#     # dir_path = os.sep.join(
+#     #     os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV',
+#     #                                  'OriginalTimeMinutesData'])
+#     # by_treatment_distance_metric_score_p_nuc, by_treatment_distance_metric_score_p_prop = \
+#     #     calc_distance_metric_between_experiments_results_of_altering_flag_values(
+#     #     dir_path=dir_path, **kwargs)
+#
+#     # single simulation xyt results testing
+#     # path = '..\\Data\\Simulations_XYT_CSV\\apoptosis_attempts\\xyt_ferroptosis_attempt.csv'
+#     # temporal_resolution = 15
+#     # p_nuc_by_time, p_prop_by_time, p_nuc_global, p_prop_global, \
+#     # all_frames_nucleators_mask, all_frames_propagators_mask,\
+#     #     accumulated_fraction_of_death_by_time = \
+#     #     calc_single_experiment_temporal_p_nuc_and_p_prop_and_endpoint_readouts_provided_temporal_resolution(
+#     #         single_exp_full_path=path, temporal_resolution=temporal_resolution)
+#     #
+#     # visualize_cell_death_in_time(xyt_full_path=path, nucleators_mask=all_frames_nucleators_mask, exp_treatment='just_treatment', exp_name='just name')
+#     #
+#     # plot_measurements_by_time(p_nuc_by_time, p_prop_by_time, accumulated_fraction_of_death_by_time,
+#     #                           temporal_resolution=temporal_resolution, exp_name='simulation_test',
+#     #                           exp_treatment='simulation')
+#
+#     ## single experiment probabilities per unit of time testing
+#     # exp_path = 'C:\\Users\\User\\PycharmProjects\\CellDeathQuantification\\Data\\Experiments_XYT_CSV\\OriginalTimeMinutesData\\20160820_10A_FB_xy13.csv'
+#     #
+#     # calc_slopes_and_probabilities_per_unit_of_time_single_experiment(exp_full_path=exp_path,
+#     #                                                                      exp_temporal_resolution=10,
+#     #                                                                      exp_treatment='C dots',
+#     #                                                                      unit_of_time_min=60,
+#     #                                                                      consider_majority_of_death_only=True)
+#
+#     # multiple experiments slopes and probabilities per unit of time testing
+#     # dir_path = os.sep.join(os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV', 'OriginalTimeMinutesData'])
+#     # calc_slopes_and_probabilities_per_unit_of_time_entire_dir(dir_full_path=dir_path,
+#     #                                                           treatments_to_include='all',
+#     #                                                           unit_of_time_min=60,
+#     #                                                           consider_majority_of_death_only=True)
+#
+#     # p_prop measurement as a fraction of adjacent dying cells in window:
+#     # dir_path = os.sep.join(os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV', 'OriginalTimeMinutesData'])
+#     # calc_multiple_exps_measurements(main_exp_dir_full_path=dir_path,
+#     #                                 limit_exp_num=float('inf'),
+#     #                                 use_sliding_time_window=True,
+#     #                                 type_of_measurement='fraction_of_adjacent_death',
+#     #                                 sliding_time_window_size_in_min=30,
+#     #                                 visualize_flag=True,
+#     #                                 treatments_to_include=['superkiller', 'fac', 'erastin', 'simulation'],#'all'
+#     #                                 consider_death_within_window_only_flag=True)
+#     # time of death differences between adjacent cells
+#     # dir_path = os.sep.join(os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV', 'OriginalTimeMinutesData'])
+#     # calc_multiple_exps_measurements(main_exp_dir_full_path=dir_path,
+#     #                                 limit_exp_num=float('inf'),
+#     #                                 use_sliding_time_window=False,
+#     #                                 type_of_measurement='adjacent_death_time_difference',
+#     #                                 bins_of_adjacent_death_diff=np.arange(0, 4, 0.5),
+#     #                                 treatments_to_include=['superkiller', 'fac', 'erastin', 'simulation'],
+#     #                                 visualize_flag=True,
+#     #                                 visualize_each_exp_flag=False
+#     #                                 )
+#
+#     # time of death variance between adjacent cells in sliding time windows
+#     # dir_path = os.sep.join(os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV', 'OriginalTimeMinutesData'])
+#     # calc_multiple_exps_measurements(main_exp_dir_full_path=dir_path,
+#     #                                 limit_exp_num=float('inf'),
+#     #                                 use_sliding_time_window=True,
+#     #                                 sliding_time_window_size_in_min=100,
+#     #                                 type_of_measurement='adjacent_death_time_variance',
+#     #                                 # bins_of_adjacent_death_diff=np.arange(-10, 10, 1),
+#     #                                 treatments_to_include=['superkiller', 'fac', 'erastin', 'simulation'],
+#     #                                 visualize_flag=True,
+#     #                                 visualize_each_exp_flag=False
+#     #                                 )
+#
+#     # time of death variance between adjacent cells in an entire experiment
+#     # dir_path = os.sep.join(os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV', 'OriginalTimeMinutesData'])
+#     # calc_multiple_exps_measurements(main_exp_dir_full_path=dir_path,
+#     #                                 limit_exp_num=float('inf'),
+#     #                                 use_sliding_time_window=False,
+#     #                                 type_of_measurement='adjacent_death_time_variance',
+#     #                                 treatments_to_include=['superkiller', 'fac', 'erastin', 'simulation'],
+#     #                                 visualize_flag=True,
+#     #                                 visualize_each_exp_flag=False)
+#
+#     # p_nuc about adjacent death time difference measurement
+#     dir_path = os.sep.join(os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV', 'OriginalTimeMinutesData'])
+#     calc_pnuc_vs_measurement_for_all_experiments(main_exp_dir_full_path=dir_path,
+#                                                  limit_exp_num=float('inf'),
+#                                                  use_sliding_time_window=False,
+#                                                  type_of_measurement='adjacent_death_time_difference',
+#                                                  bins_of_adjacent_death_diff=np.arange(0, 4, 0.5),
+#                                                  treatments_to_include=['fac&bso'],
+#                                                  # ['fac&bso', 'h2O2'], #['superkiller', 'dots', 'h2O2', 'erastin'],
+#                                                  visualize_flag=True,
+#                                                  visualize_each_exp_flag=False
+#                                                  )
 
 if __name__ == '__main__':
-    # recent dead only flag
-    # calc_rmse_between_experiments_results_of_altering_flag_values(dir_path=os.sep.join(
-    #     os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV',
-    #                                       'OriginalTimeMinutesData']))  #, limit_exp_num=10)
-    # compression flag
-    # calc_rmse_between_experiments_results_of_altering_flag_values(flag_key='dir_path',
-    #                                                               flag_values=(os.sep.join(
-    #                                                                   os.getcwd().split(os.sep)[:-1] + ['Data',
-    #                                                                                                     'Experiments_XYT_CSV',
-    #                                                                                                     'OriginalTimeMinutesData']),
-    #                                                                            os.sep.join(
-    #                                                                                os.getcwd().split(os.sep)[:-1] + [
-    #                                                                                    'Data', 'Experiments_XYT_CSV',
-    #                                                                                    'CompressedTime_XYT_CSV'])))
-    # compression flag
-    # calc_and_visualize_all_experiments_csvs_in_dir_with_altering_flag_values(flag_key='dir_path',
-    #                                                                          flag_values=(os.sep.join(
-    #     os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV',
-    #                                       'OriginalTimeMinutesData']), os.sep.join(
-    #     os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV',
-    #                                       'CompressedTime_XYT_CSV'])))
-    #
-    # MULTIPLE EXPERIMENTS
-    # calc_and_visualize_all_experiments_csvs_in_dir(limit_exp_num=float('inf'),
-    #                                                dir_path=os.sep.join(
-    #                                                    os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV',
-    #                                                                                      'OriginalTimeMinutesData']))
-
-    # # single experiment testing
-    # path = '..\\Data\\Experiments_XYT_CSV\\CompressedTime_XYT_CSV\\20160909_b16f10_aMSH_xy37.csv'
-    # p_nuc_by_time, p_prop_by_time, p_nuc_global, p_prop_global, \
-    # all_frames_nucleators_mask, all_frames_propagators_mask,\
-    #     accumulated_fraction_of_death_by_time = calc_single_experiment_temporal_p_nuc_and_p_prop_and_endpoint_readouts(single_exp_full_path=path)
-    #
-    # visualize_cell_death_in_time(xyt_full_path=path, nucleators_mask=all_frames_nucleators_mask, exp_treatment='just_treatment', exp_name='just name')
-    #
-    # plot_measurements_by_time(p_nuc_by_time, p_prop_by_time, accumulated_fraction_of_death_by_time,
-    #                           temporal_resolution=15, exp_name='20180620_HAP1_erastin_xy1', exp_treatment='test_treat')
-
-    # plot kl-divergence between recent death only flags endpoint readouts
-    # kwargs = dict()
-    # kwargs['distance_metric'] = 'kl_divergence'
-    # kwargs['visualize_flag'] = True
-    # kwargs['visualize_specific_treatments'] = ['tnf', 'erastin', 'trail']
-    # dir_path = os.sep.join(
-    #     os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV',
-    #                                  'OriginalTimeMinutesData'])
-    # by_treatment_distance_metric_score_p_nuc, by_treatment_distance_metric_score_p_prop = \
-    #     calc_distance_metric_between_experiments_results_of_altering_flag_values(
-    #     dir_path=dir_path, **kwargs)
-
-    # single simulation xyt results testing
-    # path = '..\\Data\\Simulations_XYT_CSV\\apoptosis_attempts\\xyt_ferroptosis_attempt.csv'
-    # temporal_resolution = 15
-    # p_nuc_by_time, p_prop_by_time, p_nuc_global, p_prop_global, \
-    # all_frames_nucleators_mask, all_frames_propagators_mask,\
-    #     accumulated_fraction_of_death_by_time = \
-    #     calc_single_experiment_temporal_p_nuc_and_p_prop_and_endpoint_readouts_provided_temporal_resolution(
-    #         single_exp_full_path=path, temporal_resolution=temporal_resolution)
-    #
-    # visualize_cell_death_in_time(xyt_full_path=path, nucleators_mask=all_frames_nucleators_mask, exp_treatment='just_treatment', exp_name='just name')
-    #
-    # plot_measurements_by_time(p_nuc_by_time, p_prop_by_time, accumulated_fraction_of_death_by_time,
-    #                           temporal_resolution=temporal_resolution, exp_name='simulation_test',
-    #                           exp_treatment='simulation')
-
-    ## single experiment probabilities per unit of time testing
-    # exp_path = 'C:\\Users\\User\\PycharmProjects\\CellDeathQuantification\\Data\\Experiments_XYT_CSV\\OriginalTimeMinutesData\\20160820_10A_FB_xy13.csv'
-    #
-    # calc_slopes_and_probabilities_per_unit_of_time_single_experiment(exp_full_path=exp_path,
-    #                                                                      exp_temporal_resolution=10,
-    #                                                                      exp_treatment='C dots',
-    #                                                                      unit_of_time_min=60,
-    #                                                                      consider_majority_of_death_only=True)
-
-    # multiple experiments slopes and probabilities per unit of time testing
-    # dir_path = os.sep.join(os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV', 'OriginalTimeMinutesData'])
-    # calc_slopes_and_probabilities_per_unit_of_time_entire_dir(dir_full_path=dir_path,
-    #                                                           treatments_to_include='all',
-    #                                                           unit_of_time_min=60,
-    #                                                           consider_majority_of_death_only=True)
-
-    # p_prop measurement as a fraction of adjacent dying cells in window:
-    # dir_path = os.sep.join(os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV', 'OriginalTimeMinutesData'])
-    # calc_multiple_exps_measurements(main_exp_dir_full_path=dir_path,
-    #                                 limit_exp_num=float('inf'),
-    #                                 use_sliding_time_window=True,
-    #                                 type_of_measurement='fraction_of_adjacent_death',
-    #                                 sliding_time_window_size_in_min=30,
-    #                                 visualize_flag=True,
-    #                                 treatments_to_include=['superkiller', 'fac', 'erastin', 'simulation'],#'all'
-    #                                 consider_death_within_window_only_flag=True)
-    # time of death differences between adjacent cells
-    # dir_path = os.sep.join(os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV', 'OriginalTimeMinutesData'])
-    # calc_multiple_exps_measurements(main_exp_dir_full_path=dir_path,
-    #                                 limit_exp_num=float('inf'),
-    #                                 use_sliding_time_window=False,
-    #                                 type_of_measurement='adjacent_death_time_difference',
-    #                                 bins_of_adjacent_death_diff=np.arange(0, 4, 0.5),
-    #                                 treatments_to_include=['superkiller', 'fac', 'erastin', 'simulation'],
-    #                                 visualize_flag=True,
-    #                                 visualize_each_exp_flag=False
-    #                                 )
-
-    # time of death variance between adjacent cells in sliding time windows
-    # dir_path = os.sep.join(os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV', 'OriginalTimeMinutesData'])
-    # calc_multiple_exps_measurements(main_exp_dir_full_path=dir_path,
-    #                                 limit_exp_num=float('inf'),
-    #                                 use_sliding_time_window=True,
-    #                                 sliding_time_window_size_in_min=100,
-    #                                 type_of_measurement='adjacent_death_time_variance',
-    #                                 # bins_of_adjacent_death_diff=np.arange(-10, 10, 1),
-    #                                 treatments_to_include=['superkiller', 'fac', 'erastin', 'simulation'],
-    #                                 visualize_flag=True,
-    #                                 visualize_each_exp_flag=False
-    #                                 )
-
-    # time of death variance between adjacent cells in an entire experiment
-    # dir_path = os.sep.join(os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV', 'OriginalTimeMinutesData'])
-    # calc_multiple_exps_measurements(main_exp_dir_full_path=dir_path,
-    #                                 limit_exp_num=float('inf'),
-    #                                 use_sliding_time_window=False,
-    #                                 type_of_measurement='adjacent_death_time_variance',
-    #                                 treatments_to_include=['superkiller', 'fac', 'erastin', 'simulation'],
-    #                                 visualize_flag=True,
-    #                                 visualize_each_exp_flag=False)
-
-    # p_nuc about adjacent death time difference measurement
-    dir_path = os.sep.join(os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV', 'OriginalTimeMinutesData'])
-    calc_pnuc_vs_measurement_for_all_experiments(main_exp_dir_full_path=dir_path,
-                                                 limit_exp_num=float('inf'),
-                                                 use_sliding_time_window=False,
-                                                 type_of_measurement='adjacent_death_time_difference',
-                                                 bins_of_adjacent_death_diff=np.arange(0, 4, 0.5),
-                                                 treatments_to_include=['fac&bso'],#['fac&bso', 'h2O2'], #['superkiller', 'dots', 'h2O2', 'erastin'],
-                                                 visualize_flag=True,
-                                                 visualize_each_exp_flag=False
-                                                 )
+    single_exp_path = 'C:\\Users\\User\\PycharmProjects\\CellDeathQuantification\\Data\\Experiments_XYT_CSV\\OriginalTimeMinutesData\\20160820_10A_FB_xy13.csv'
+    single_exp_df = pd.read_csv(single_exp_path)
+    cells_loci = single_exp_df.loc[:, ['cell_x', 'cell_y']].values
+    cells_neighbors1, cells_neighbors2, cells_neighbors3 = get_cells_neighbors(cells_loci)
+    calculate_local_cell_density_single_experiment(cells_loci, cells_neighbors1, type_of_density='distance_density')

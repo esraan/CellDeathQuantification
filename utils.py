@@ -201,9 +201,12 @@ def get_all_paths_csv_files_in_dir(dir_path: str) -> Tuple[List, List]:
 
 def get_exp_treatment_type_and_temporal_resolution(exp_file_name: str,
                                                    meta_data_file_full_path: str = None,
-                                                   compressed_flag: bool = False) -> Tuple[str, int]:
+                                                   compressed_flag: bool = False,
+                                                   get_exp_density: bool = False) -> Union[Tuple[str, int],
+                                                                                           Tuple[str, int, int]]:
     """
     returns an experiment treatment type and temporal resolution (i.e., interval between frames)
+    if get_exp_density is set to True, the function also returns the density of the experiment.
     :param exp_file_name:
     :param meta_data_file_full_path:
     :return:
@@ -222,6 +225,9 @@ def get_exp_treatment_type_and_temporal_resolution(exp_file_name: str,
     exp_meta_data = meta_data_file[meta_data_file['File Name'] == exp_file_name]
     exp_treatment, exp_time_res = exp_meta_data['Treatment'].values[0], \
                                   int(exp_meta_data['Time Interval (min)'].values[0])
+    if get_exp_density:
+        exp_density = exp_meta_data['Density(#Cells)'].values[0]
+        return exp_treatment, exp_time_res, exp_density
 
     return exp_treatment, exp_time_res
 
@@ -457,8 +463,14 @@ def clean_string_from_bad_chars(treatment_name: str, replacement='_') -> str:
 
 
 def normalize(values: np.array, normalization_method: str = 'z_score', axis: int = 0):
+    values = np.array(values)
     if normalization_method == 'z_score':
         return zscore(values, axis=axis)
+    if normalization_method == 'min_max':
+        max_val = values.max()
+        min_val = values.min()
+        return (max_val - values) / (max_val - min_val)
+
     Warning('the normalization method is unknown!')
     return values
 

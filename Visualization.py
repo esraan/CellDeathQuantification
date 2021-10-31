@@ -9,6 +9,7 @@ import matplotlib.cm as cm
 from global_parameters import *
 from utils import *
 
+
 # todo: add documentation to all functions
 
 
@@ -27,12 +28,14 @@ def visualize_distance_metric_of_altering_flag_values_by_treatment(p_nuc_distanc
                 if given_treatment_name.lower() in full_treatment_name.lower():
                     full_treatment_names.append(full_treatment_name)
 
-        p_nuc_distance_by_treatment = {key: val for key, val in p_nuc_distance_by_treatment.items() if key in full_treatment_names}
-        p_prop_distance_by_treatment = {key: val for key, val in p_prop_distance_by_treatment.items() if key in full_treatment_names}
+        p_nuc_distance_by_treatment = {key: val for key, val in p_nuc_distance_by_treatment.items() if
+                                       key in full_treatment_names}
+        p_prop_distance_by_treatment = {key: val for key, val in p_prop_distance_by_treatment.items() if
+                                        key in full_treatment_names}
 
     fig, ax = plt.subplots()
     treatments_axis = np.arange(0, len(p_nuc_distance_by_treatment), 1)
-    ax.bar(x=treatments_axis, height=list(p_nuc_distance_by_treatment.values()), color=(1,0,0,.8),
+    ax.bar(x=treatments_axis, height=list(p_nuc_distance_by_treatment.values()), color=(1, 0, 0, .8),
            label='Fraction of Nucleators')
     ax.set_xticks(treatments_axis)
     ax.set_xticklabels(list(p_nuc_distance_by_treatment.keys()))
@@ -40,7 +43,7 @@ def visualize_distance_metric_of_altering_flag_values_by_treatment(p_nuc_distanc
     ax.set_ylabel(f'{distance_metric_name} distance between {flag_name} results')
     ax.set_title('P(Nuc)')
 
-    ax.bar(x=treatments_axis, height=list(p_prop_distance_by_treatment.values()), color=(0,1,1,.8),
+    ax.bar(x=treatments_axis, height=list(p_prop_distance_by_treatment.values()), color=(0, 1, 1, .8),
            label='Fraction of Propagators')
     ax.set_xticks(treatments_axis)
     ax.set_xticklabels(list(p_prop_distance_by_treatment.keys()))
@@ -66,7 +69,7 @@ def visualize_distance_metric_of_altering_flag_values_by_treatment(p_nuc_distanc
         path_for_plot = os.sep.join([path_for_plot_dir,
                                      f'global_p_nuc_vs_p_prop_all_exps_flag={flag_name}_{distance_metric_name}_distance_scores'])
 
-        plt.savefig(path_for_plot+'.png', dpi=200)
+        plt.savefig(path_for_plot + '.png', dpi=200)
         plt.savefig(path_for_plot + '.eps', dpi=200)
 
     plt.close(fig)
@@ -136,7 +139,8 @@ def visualize_endpoint_readouts_by_treatment_to_varying_calculation_flags(xy1_re
     ax.set_ylabel('Log' + y_label if use_log else y_label)
 
     add_to_title = f'{first_flag_value_color} is {first_flag_type_name_and_value}\n{second_flag_value_color} is {second_flag_type_name_and_value}'
-    ax.set_title(f'Log(Fraction) of Nucleators & Propagators\n{add_to_title}' if use_log else f'Fraction of Nucleators & Propagators\n{add_to_title}')
+    ax.set_title(
+        f'Log(Fraction) of Nucleators & Propagators\n{add_to_title}' if use_log else f'Fraction of Nucleators & Propagators\n{add_to_title}')
 
     if not use_log:
         ax.set_xticks([0.1, .30])
@@ -158,7 +162,8 @@ def visualize_endpoint_readouts_by_treatment_to_varying_calculation_flags(xy1_re
             os.makedirs(path_for_plot_dir)
 
         if use_log:
-            path_for_plot = os.sep.join([path_for_plot_dir, f'LOG_global_p_nuc_vs_p_prop_all_exps_flag={flag_name}.png'])
+            path_for_plot = os.sep.join(
+                [path_for_plot_dir, f'LOG_global_p_nuc_vs_p_prop_all_exps_flag={flag_name}.png'])
         else:
             path_for_plot = os.sep.join([path_for_plot_dir, f'global_p_nuc_vs_p_prop_all_exps_flag={flag_name}.png'])
         plt.savefig(path_for_plot, dpi=200, bbox_extra_artists=[lgd], bbox_inches='tight')
@@ -190,7 +195,7 @@ def visualize_endpoint_readouts_by_treatment_about_readouts(x_readout: np.array,
     if plot_about_treatment:
         fig, axis = plt.subplots(1, 2)
         unique_treatments = set(treatment_per_readout)
-        x_axis_dict = {treatment_name:idx for idx, treatment_name in enumerate(unique_treatments)}
+        x_axis_dict = {treatment_name: idx for idx, treatment_name in enumerate(unique_treatments)}
         # x_axis = np.arange(0, len(x_readout), 1)
     else:
         fig, ax = plt.subplots()  # figsize=(10, 10))
@@ -317,9 +322,93 @@ def visualize_endpoint_readouts_by_treatment_about_readouts(x_readout: np.array,
         if fig_name_to_save is None:
             plot_about_time_path_addition = '_about_treatment' if plot_about_treatment else ''
             if use_log:
-                path_for_plot = os.sep.join([path_for_plot_dir, f'LOG_global_p_nuc_vs_p_prop_all_exps{plot_about_time_path_addition}'])
+                path_for_plot = os.sep.join(
+                    [path_for_plot_dir, f'LOG_global_p_nuc_vs_p_prop_all_exps{plot_about_time_path_addition}'])
             else:
-                path_for_plot = os.sep.join([path_for_plot_dir, f'global_p_nuc_vs_p_prop_all_exps{plot_about_time_path_addition}'])
+                path_for_plot = os.sep.join(
+                    [path_for_plot_dir, f'global_p_nuc_vs_p_prop_all_exps{plot_about_time_path_addition}'])
+        else:
+            path_for_plot = os.sep.join([path_for_plot_dir, fig_name_to_save])
+
+        path_for_plot = path_for_plot if full_path_to_save_fig is None else full_path_to_save_fig
+        plt.savefig(path_for_plot + '.png', dpi=200)  # , bbox_extra_artists=[lgd], bbox_inches='tight')
+        plt.savefig(path_for_plot + '.eps', dpi=200)  # , bbox_extra_artists=[lgd], bbox_inches='tight')
+
+    plt.close(fig)
+
+
+def visualize_endpoint_readouts_by_treatment_about_readouts_3d(x_readout: np.array,
+                                                               y_readout: np.array,
+                                                               z_readout: np.array,
+                                                               treatment_per_readout: np.array,
+                                                               full_dir_path_to_save_fig: str = None,
+                                                               fig_name_to_save: str = None,
+                                                               full_path_to_save_fig: str = None,
+                                                               x_label: str = 'Fraction of Nucleators',
+                                                               y_label: str = 'Fraction of Propagators',
+                                                               z_label: str = 'Experiment Density',
+                                                               fig_title: str = 'Fraction of Nucleators & Propagators',
+                                                               **kwargs):
+    show_legend = kwargs.get('show_legend', False)
+    legend_font_size = kwargs.get('legend_font_size', 6)
+    legend_marker_ration = kwargs.get('legend_marker_ration', 0.8)
+
+    marker_per_point, color_per_point, treatment_to_marker, treatment_to_color = \
+        get_marker_per_treatment_list(treatment_per_readout)
+
+    fig = plt.figure()
+
+    ax = fig.add_subplot(projection='3d')
+
+    for point_idx, coordinates in enumerate(zip(x_readout, y_readout, z_readout)):
+        px, py, pz = coordinates
+
+        color, marker = color_per_point[point_idx], marker_per_point[point_idx]
+        ax.scatter(px, py, pz, marker=marker, color=color)
+
+    ax.set_ylim([0, 1])
+    ax.set_xlim([0, 1])
+
+    ax.grid('on')
+    ax.set_xlabel(x_label)
+    ax.set_ylabel(y_label)
+    ax.set_zlabel(z_label)
+    ax.set_title(fig_title)
+
+    if show_legend:
+        # filter treatments colors and markers to show only computed treatments in legend
+        filtered_treatment_to_color = {}
+        filtered_treatment_to_marker = {}
+        for key, val in treatment_to_color.items():
+            if key in treatment_per_readout:
+                filtered_treatment_to_color[key] = val
+                filtered_treatment_to_marker[key] = treatment_to_marker[key]
+
+        custom_handles, custom_labels = get_custom_legend_artists(labels_to_colors=filtered_treatment_to_color,
+                                                                  labels_to_markers=filtered_treatment_to_marker)
+
+        plt.legend(handles=custom_handles,
+                   labels=custom_labels,
+                   loc='best',
+                   fontsize=legend_font_size,
+                   markerscale=legend_marker_ration)
+
+    plt.tight_layout()
+
+    if SHOWFIG:
+        plt.show()
+    elif SAVEFIG:
+        path_for_plot_dir = full_dir_path_to_save_fig if full_dir_path_to_save_fig is not None else os.sep.join(
+            os.getcwd().split(os.sep)[:-1] + ['Results', 'MeasurementsEndpointReadoutsPlots',
+                                              'Global_P_Nuc_VS_P_Prop'])
+
+        if not os.path.isdir(path_for_plot_dir):
+            os.makedirs(path_for_plot_dir)
+
+        if fig_name_to_save is None:
+            plot_about_time_path_addition = '_about_treatment' if plot_about_treatment else ''
+            path_for_plot = os.sep.join(
+                [path_for_plot_dir, f'global_p_nuc_vs_p_prop_all_exps{plot_about_time_path_addition}'])
         else:
             path_for_plot = os.sep.join([path_for_plot_dir, fig_name_to_save])
 
@@ -355,7 +444,8 @@ def visualize_cell_death_in_time(xyt_df: pd.DataFrame = None,
         raise ValueError('must provide exp treatment and name!')
 
     # clean exp_name and treatment from bad characters
-    exp_name, exp_treatment = clean_string_from_bad_chars(exp_treatment, replacement=''), clean_string_from_bad_chars(exp_treatment)
+    exp_name, exp_treatment = clean_string_from_bad_chars(exp_treatment, replacement=''), clean_string_from_bad_chars(
+        exp_treatment)
 
     data = xyt_df if xyt_df is not None else pd.read_csv(xyt_full_path)
     death_times = data['death_time'].values
@@ -431,10 +521,11 @@ def plot_measurements_by_time(measurement1_by_time: np.array,
     plt.clf()
 
     # clean exp_name and treatment from bad characters
-    exp_name, exp_treatment = clean_string_from_bad_chars(exp_name, replacement=''), clean_string_from_bad_chars(exp_treatment)
+    exp_name, exp_treatment = clean_string_from_bad_chars(exp_name, replacement=''), clean_string_from_bad_chars(
+        exp_treatment)
 
     max_time = len(measurement1_by_time) * temporal_resolution if max_time is None else max_time
-    time_axis = np.arange(0, max_time+1, temporal_resolution)
+    time_axis = np.arange(0, max_time + 1, temporal_resolution)
 
     fig, ax = plt.subplots()
 
@@ -486,7 +577,7 @@ def plot_measurements_by_time(measurement1_by_time: np.array,
             os.makedirs(path_for_plot_dir)
 
         path_for_plot = os.sep.join([path_for_plot_dir, f'{exp_name}'])
-        plt.savefig(path_for_plot+'.png', dpi=200)
+        plt.savefig(path_for_plot + '.png', dpi=200)
         plt.savefig(path_for_plot + '.eps', dpi=200)
 
     plt.close(fig)
@@ -610,13 +701,13 @@ def plot_temporal_readout_for_entire_treatment(readouts: List[np.array],
                                                **kwargs) -> None:
     treatment = clean_string_from_bad_chars(treatment_name=treatment)
     only_consider_recent = kwargs.get('only_recent_death_flag_for_neighbors_calc',
-                                                           RECENT_DEATH_ONLY_FLAG)
+                                      RECENT_DEATH_ONLY_FLAG)
     path_to_dir_to_save = kwargs.get('dir_path', os.sep.join(
         os.getcwd().split(os.sep)[:-1] + ['Results', 'TemporalMeasurementsPlots',
                                           'Only recent death considered for neighbors results',
                                           f'{treatment}']) if only_consider_recent else os.sep.join(
         os.getcwd().split(os.sep)[:-1] + ['Results', 'TemporalMeasurementsPlots',
-                                          f'{treatment}']) )
+                                          f'{treatment}']))
     fig_name = kwargs.get('fig_name', f'{treatment}_measurements_per_{unit_of_time}_min')
 
     fig, axis = plt.subplots(1, 2)
@@ -632,7 +723,7 @@ def plot_temporal_readout_for_entire_treatment(readouts: List[np.array],
             time_axis = np.arange(0, len(readout) * unit_of_time, unit_of_time)
             ax.plot(time_axis, readout, c=color)
 
-        ax.set_xticks([time_axis[0]]+[time_axis[-1]])
+        ax.set_xticks([time_axis[0]] + [time_axis[-1]])
         ax.set_title(label)
     fig.suptitle(f'{treatment} Treated')
     if SHOWFIG:
@@ -708,7 +799,6 @@ def present_fig(fig: plt.figure,
                 full_dir_path_to_save_fig: str = None,
                 fig_name_suffix: str = '',
                 fig_name_prefix: str = '') -> None:
-
     if show_fig is None:
         show_fig = SHOWFIG
     if save_fig is None:
@@ -736,7 +826,6 @@ def visualize_measurement_per_treatment(readouts_per_experiment: np.array,
                                         measurement_type: str,
                                         dir_to_save_fig_full_path: str,
                                         **kwargs) -> None:
-
     # set_y_lim = kwargs.get('set_y_lim', True)
     save_fig = kwargs.get('save_fig', SAVEFIG)
     show_fig = kwargs.get('show_fig', SHOWFIG)
