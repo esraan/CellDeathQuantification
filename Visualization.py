@@ -219,8 +219,10 @@ def visualize_endpoint_readouts_by_treatment_about_readouts(x_readout: np.array,
         else:
             ax.plot(x, y, ms=marker_size, marker=marker,
                     color=color, label=treatment_per_readout[point_idx])
-
-            ax.set_ylim([0, 1])
+            if y_readout.max() <= 1:
+                ax.set_ylim([0, 1])
+            else:
+                ax.set_ylim((min((0, y_readout.min())), max((1.1, y_readout.max()))))
 
     if plot_about_treatment:
         # temporal_unit = 'Minutes' if temporal_resolution != 1 else 'Frame#'
@@ -274,7 +276,7 @@ def visualize_endpoint_readouts_by_treatment_about_readouts(x_readout: np.array,
         ax.set_ylabel('Log ' + y_label if use_log else y_label)
         ax.set_title(fig_title if not use_log else f'Log of {fig_title}')
         if not use_log:
-            x_tick_limits = [0.1, .30]
+            x_tick_limits = [0, 0.30]
             y_tick_limits = [0.6, 0.95]
         else:
             x_tick_limits = [-1, 0]

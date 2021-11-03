@@ -7,6 +7,9 @@ from scipy.stats import linregress, zscore, pearsonr
 from scipy.signal import correlate
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error as mse
+from sklearn.metrics import silhouette_score as sil_score
+from sklearn.metrics import calinski_harabasz_score as cali_h_score
+from sklearn.metrics import davies_bouldin_score as davies_b_score
 from sklearn.metrics.pairwise import euclidean_distances as euc_dis
 from global_parameters import *
 from matplotlib.lines import Line2D
@@ -521,14 +524,97 @@ def calc_correlation(x: np.array, y: np.array, type_of_correlation: str = None,
     p_val = None
 
     if type_of_correlation == 'discrete_correlation':
-        correlation = correlate(x, y,
+        correlation = correlate(np.array(x).flatten(), np.array(y).flatten(),
                                 mode=kwargs.get('correlate_mode', 'full'),
                                 method=kwargs.get('correlate_method', 'auto'))
     else:
         Warning('Pearson correlation assumes normal distribution of x and y')
-        correlation, p_val = pearsonr(x, y)
+        correlation, p_val = pearsonr(np.array(x).flatten(), np.array(y).flatten())
 
     if print_p_val:
         print(f'p value of {type_of_correlation}={p_val}')
 
     return correlation
+
+
+def clusters_evaluation(x_values: np.array,
+                        y_values: np.array,
+                        clustering_labels: np.array,
+                        cluster_evaluation_method: str = 'silhouette_coefficient',
+                        **kwargs) -> Union[Tuple[Dict[str, float], float], float]:
+    """
+    this function calculates the clustering performance of some clustering algorithm,
+        ALL scoring measures are intrinsic - do not require "ground-truth" labels, assuming the clustering was correct.
+    for each x,y coordinate of a specific datapoint (zipped by order), the cluster label is the corresponding cluster
+        label in 'clustering_labels' parameter.
+        e.g. : given the values: x_values = [0, 1, 2] | y_values = [3, 4, 5] | clustering_labels = ['0', '1', '1']
+            the cluster '1' contains the points (1, 4) and (2, 5) and the cluster '0' contains the point (0, 3).
+
+    possible methods to evaluate clustering performance:
+        All clusters evaluations scores combined (returning a single float value):
+             silhouette_coefficient -  (b - a)/max(a, b)
+                    The Silhouette Coefficient is defined for each sample and is composed of two scores:
+                    a: The mean distance between a sample and all other points in the same cluster.
+                    b: The mean distance between a sample and all other points in the next nearest cluster.
+                    Finally, the mean coefficient is calculated and returned
+             calinski_harabasz_index - The index is the ratio of the sum of between-clusters dispersion and of
+                    within-cluster dispersion for all clusters (where dispersion is defined as the sum of distances squared)
+
+             davies_bouldin_index - This index signifies the average ‘similarity’ between clusters, where the similarity
+                    is a measure that compares the distance between clusters with the size of the clusters themselves.
+                    Zero is the lowest possible score. Values closer to zero indicate a better partition.
+
+             for all methods pros and cons,
+                go to sklearn.metrics documentation: https://scikit-learn.org/stable/modules/clustering.html
+
+        By cluster evaluation and scores (returning by cluster scores dictionary and a mean score for all clusters):
+            NOT IMPLEMENTED YET - raises NotImplemented exception.
+
+    :param x_values:
+    :param y_values:
+    :param clustering_labels:
+    :param cluster_evaluation_method:
+    :return:
+    """
+    if cluster_evaluation_method == 'silhouette_coefficient':
+        metric = kwargs.get('silhouette_coefficient_metric', 'euclidean')
+        cluster_eval_score = sil_score(np.hstack((x_values.reshape(-1, 1), np.array(y_values).reshape(-1, 1))),
+                                       clustering_labels, metric=metric)
+        return cluster_eval_score
+    elif cluster_evaluation_method == 'calinski_harabasz_index':
+        cluster_eval_score = cali_h_score(np.hstack((x_values.reshape(-1, 1), np.array(y_values).reshape(-1, 1))),
+                                          clustering_labels)
+        return cluster_eval_score
+    elif cluster_evaluation_method == 'davies_bouldin_index':
+        cluster_eval_score = davies_b_score(np.hstack((x_values.reshape(-1, 1), np.array(y_values).reshape(-1, 1))),
+                                            clustering_labels)
+        return cluster_eval_score
+
+    # by cluster evaluation:
+    else:
+        # sort x and y values by clusters:
+        clusters = {}
+        for x, y, label in zip(x_values, y_values, clustering_labels):
+            clusters[label] = clusters.get(label, []) + [x, y]
+        # turn list of x y coordinates into np.arrays
+        for key, val in clusters.items():
+            clusters[key] = np.array(val)
+
+        clusters_metric_scores = {}
+        for label, cluster in clusters.items():
+            cluster_eval_score = 0
+            if cluster_evaluation_method == 'silhouette_coefficient':
+                metric = kwargs.get('silhouette_coefficient_metric', 'euclidean')
+                # cluster_eval_score =
+                raise NotImplemented(f'The {cluster_evaluation_method} clustering evaluation method is not '
+                                     f'implemented yet!')
+            elif cluster_evaluation_method == 'dunns_index':
+                # cluster_eval_score =
+                raise NotImplemented(f'The {cluster_evaluation_method} clustering evaluation method is not '
+                                     f'implemented yet!')
+
+            clusters_metric_scores[label] = cluster_eval_score
+
+        mean_clustering_score = np.array(list(clusters_metric_scores.values())).mean()
+
+        return clusters_metric_scores, mean_clustering_score
