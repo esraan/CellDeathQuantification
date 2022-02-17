@@ -1,4 +1,8 @@
 import json
+import os
+import shutil
+from shutil import copyfile, unpack_archive, make_archive
+import random
 from typing import *
 import numpy as np
 import pandas as pd
@@ -13,7 +17,7 @@ from sklearn.metrics import davies_bouldin_score as davies_b_score
 from sklearn.metrics.pairwise import euclidean_distances as euc_dis
 from global_parameters import *
 from matplotlib.lines import Line2D
-import random
+import zipfile
 
 
 def get_custom_legend_artists(labels_to_colors: dict, labels_to_markers: dict):
@@ -239,7 +243,7 @@ def read_experiment_cell_xy_and_death_times(exp_full_path: str) -> Tuple[np.arra
     """
     reads an experiment's csv file, returns the cell loci and times of deaths
     :param exp_full_path:
-    :return:
+    :return: Tuple[np.array, np.array] - cells_loci, cells_times_of_death
     """
     full_df = pd.read_csv(exp_full_path)
     cells_loci = full_df.loc[:, ['cell_x', 'cell_y']].values
@@ -261,16 +265,33 @@ def kl_divergence(p: np.array, q: np.asarray) -> np.ndarray:
     return np.sum(np.where(p != 0, p * np.log(p / q), 0))
 
 
-def get_euclidean_distance_between_cells_in_pixels(cell1_xy: Tuple, cell2_xy: Tuple) -> float:
+def get_euclidean_distance_between_cells_in_pixels(cell1_xy: Union[Tuple, np.array], cell2_xy: Union[Tuple, np.array]) \
+        -> Union[float, np.array]:
     """
     returns the real distance
     :param cell1_xy:
     :param cell2_xy:
     :return:
     """
-    cell1_x, cell1_y = cell1_xy
-    cell2_x, cell2_y = cell2_xy
-    return ((cell1_x - cell2_x) ** 2 + (cell1_y - cell2_y) ** 2) ** .5
+    if isinstance(cell1_xy, np.ndarray):
+        if len(cell1_xy.shape) > 1:
+            seeder = cell2_xy
+            neighbors = cell1_xy
+        elif len(cell2_xy.shape) > 1:
+            seeder = cell1_xy
+            neighbors = cell2_xy
+        else:
+            return get_euclidean_distance_between_cells_in_pixels(tuple(cell1_xy), tuple(cell2_xy))
+
+        seeder_x, seeder_y = seeder[0], seeder[1]
+        neighbors_x, neighbors_y = neighbors[:, 0], neighbors[:, 1]
+
+        return ((seeder_x - neighbors_x) ** 2 + (seeder_y - neighbors_y) ** 2) ** .5
+
+    else:
+        cell1_x, cell1_y = cell1_xy
+        cell2_x, cell2_y = cell2_xy
+        return ((cell1_x - cell2_x) ** 2 + (cell1_y - cell2_y) ** 2) ** .5
 
 
 def get_linear_regression_line_between_two_signals(x: np.array, y: np.array) -> Tuple[np.array, np.array]:
@@ -511,7 +532,7 @@ def verify_any_str_from_lst_in_specific_str(str_to_verify: str, lst_of_strings: 
 
 
 def calc_correlation(x: np.array, y: np.array, type_of_correlation: str = None,
-                     print_p_val: bool = True, **kwargs) -> Union[float, np.array]:
+                     print_p_val: bool = True, return_p_val: bool = False, **kwargs) -> Union[float, np.array]:
     """
     default is pearson correlation (if type_of_correlation argument is None)
     :param x: np.array
@@ -534,6 +555,8 @@ def calc_correlation(x: np.array, y: np.array, type_of_correlation: str = None,
     if print_p_val:
         print(f'p value of {type_of_correlation}={p_val}')
 
+    if return_p_val:
+        return {'correlation': correlation, 'p_val': p_val}
     return correlation
 
 
@@ -618,3 +641,204 @@ def clusters_evaluation(x_values: np.array,
         mean_clustering_score = np.array(list(clusters_metric_scores.values())).mean()
 
         return clusters_metric_scores, mean_clustering_score
+
+
+def fit_signal_to_led_model(org_signal: np.array, time_signal: np.array, lf_0=0, d_o=0, d_r=None) -> Tuple[
+    np.array, float]:
+    """
+    fits a signal (org_singal) to the LED model used to quantify cell death.
+    :param org_signal:
+    :param time_signal:
+    :param lf_0:
+    :param d_o:
+    :param d_r:
+    :return:
+    """
+    assert len(org_signal) == len(time_signal), 'The signal and its corresponding Time axis (time_signal) must ' \
+                                                'have the same shape'
+    if d_r is None:
+        signal_rate_of_change = org_signal[1:] - org_signal[:-1]
+        d_r = signal_rate_of_change.max()
+    diffs_in_lf_from_prev = np.absolute(org_signal[1:] - org_signal[:-1])
+    lf_p = diffs_in_lf_from_prev.min()
+    fitted_signal = lf_0 + (lf_p - lf_0) * (1 - np.exp(-d_r * (time_signal - d_o)))
+    return fitted_signal, d_r
+
+
+def fix_tiff_stack_naming_format(tiff_stack_dir_path: str, sep_to_delete: str, sep_to_insert: str = '-',
+                                 file_format: str = 'tif',
+                                 single_file_name: str = '') -> str:
+    """
+    if the inner file names and formats use the wrongs delimiters, use this function
+    to correct it.
+    :param single_file_name:
+    :param tiff_stack_dir_path:
+    :param sep_to_delete:
+    :param sep_to_insert:
+    :param file_format:
+    :return: the path to the directory where the fixed files are stored
+    """
+    dir_name = tiff_stack_dir_path.split(os.sep)[-1]
+    fixed_dir_name = dir_name.replace(sep_to_delete, sep_to_insert).lower()
+    fixed_dir_path = os.sep.join(tiff_stack_dir_path.split(os.sep)[:-1] + [fixed_dir_name])
+
+    if not os.path.isdir(fixed_dir_path):
+        os.makedirs(fixed_dir_path)
+
+    all_files_in_stack_names = list(os.listdir(tiff_stack_dir_path))
+    for file_idx, filename in enumerate(all_files_in_stack_names):
+        file_path = os.sep.join([tiff_stack_dir_path, filename])
+
+        # if contains apple MacOS files.
+        if 'ds_store' in filename.lower() or 'thumbs' in filename.lower():
+            os.remove(file_path)
+            continue
+
+        fixed_file_name = filename.replace(sep_to_delete, sep_to_insert).lower().replace('25', '50')
+        frame_no = fixed_file_name.split(sep_to_insert)[-1]
+        frame_no = ''.join([x for x in frame_no if x.isdigit()])
+        single_file_name = sep_to_insert.join(fixed_file_name.split(sep_to_insert)[:-1]) if single_file_name == '' else single_file_name
+        fixed_file_name = f'{single_file_name.replace("25", "50")}_{frame_no}.{file_format}'
+
+        #         move file from old directory to new and fixed directory
+        fixed_file_path = os.sep.join([fixed_dir_path, fixed_file_name])
+        copyfile(file_path, fixed_file_path)
+    return fixed_dir_path
+
+
+def fix_bulk_zip_files_with_bad_formatting(main_dir_to_zip_files: str, dir_to_save_fixed_files: str,
+                                           sep_to_delete: str = '_', sep_to_insert: str = '-',
+                                           file_format: str = 'tif') -> None:
+    """
+    currently, only supports zip format compression
+    :param main_dir_to_zip_files:
+    :param dir_to_save_fixed_files:
+    :param rezip:
+    :param sep_to_delete:
+    :param sep_to_insert:
+    :param file_format:
+    :return:
+    """
+    all_files_in_stack_names = list(os.listdir(main_dir_to_zip_files))
+    for file_idx, filename in enumerate(all_files_in_stack_names):
+        file_path = os.sep.join([main_dir_to_zip_files, filename])
+
+        # if contains apple MacOS files.
+        if 'ds_store' in filename.lower():
+            os.remove(file_path)
+            continue
+        # if not a zip file, skip it
+        if not filename.endswith('zip'):
+            continue
+        # creating a temporary directory to store extracted files
+        temp_dir = os.path.join(main_dir_to_zip_files, f'temp_{np.random.randint(0, 10, 1)[0]}')
+        os.makedirs(temp_dir)
+
+        # with zipfile.ZipFile(file_path, 'r') as zip_ref:
+        try:
+            unpack_archive(file_path, temp_dir)
+
+            # fix the entire stacks' bad formatting
+            fixed_file_name = f'{sep_to_insert}'.join(map(lambda x: x.lower(), filename.split(sep_to_delete)[:-1]))
+
+            fixed_dir_path = fix_tiff_stack_naming_format(tiff_stack_dir_path=os.path.join(temp_dir, filename.replace('.zip', '')),
+                                                          sep_to_delete=sep_to_delete,
+                                                          sep_to_insert=sep_to_insert,
+                                                          file_format=file_format,
+                                                          single_file_name=fixed_file_name)
+            # create a new fixed archive
+            fixed_archive_file_path = make_archive(filename.replace('.zip', ''), format='zip', root_dir=fixed_dir_path)
+            fixed_archive_file_name = fixed_archive_file_path.split(os.sep)[-1]
+            fixed_archive_new_path = os.path.join(dir_to_save_fixed_files, fixed_archive_file_name)
+            shutil.move(fixed_archive_file_path, fixed_archive_new_path)
+            # delete the temporary directory
+            shutil.rmtree(temp_dir)
+        except Exception as e:
+            shutil.rmtree(temp_dir)
+            print(f"something wen't wrong in file: {file_path}.\nORIGINAL ERROR:\n{e}")
+
+def fix_missing_experiment_number(path_of_zip_file: str):
+    dir_of_file = os.sep.join(path_of_zip_file.split(os.sep)[:-1])
+    file_name_no_zip = path_of_zip_file.split(os.sep)[-1].replace('.zip', '')
+    temp_dir = os.path.join(dir_of_file, f'temp')
+    temp_fixed_path = os.path.join(temp_dir, 'fixed', file_name_no_zip)
+    os.makedirs(temp_dir)
+    os.makedirs(temp_fixed_path)
+    fixed_zip_dir_path = os.path.join(dir_of_file, f'fixed')
+    if not os.path.isdir(fixed_zip_dir_path):
+        os.makedirs(fixed_zip_dir_path)
+    try:
+        unpack_archive(path_of_zip_file, temp_dir)
+        for filename in filter(lambda x: x.endswith('.tif'), list(os.listdir(temp_dir))):
+            filepath = os.path.join(temp_dir, filename)
+            file_name_numbering_and_file_type = ''.join(filename.split('_')[-1])
+            new_filename = f"{file_name_no_zip}_{file_name_numbering_and_file_type}"
+            new_file_path = os.path.join(temp_fixed_path, new_filename)
+            copyfile(filepath, new_file_path)
+
+        fixed_archive_file_path = make_archive(file_name_no_zip, format='zip', root_dir=temp_fixed_path)
+        shutil.move(fixed_archive_file_path, fixed_zip_dir_path)
+        shutil.rmtree(temp_dir)
+    except Exception as e:
+        shutil.rmtree(temp_dir)
+        print(f"something wen't wrong in file: {path_of_zip_file}.\nORIGINAL ERROR:\n{e}")
+
+if __name__ == '__main__':
+    fix_missing_experiment_number(
+        'G:\\My Drive\\Thesis\\Experiments\\2021-2022 Density Experiments\\TEMP\\mike-density-200k-16.zip')
+
+    fix_missing_experiment_number(
+        'G:\\My Drive\\Thesis\\Experiments\\2021-2022 Density Experiments\\TEMP\\mike-density-200k-17.zip')
+
+    fix_missing_experiment_number(
+        'G:\\My Drive\\Thesis\\Experiments\\2021-2022 Density Experiments\\TEMP\\mike-density-200k-18.zip')
+
+    fix_missing_experiment_number(
+        'G:\\My Drive\\Thesis\\Experiments\\2021-2022 Density Experiments\\TEMP\\mike-density-200k-19.zip')
+
+    fix_missing_experiment_number(
+        'G:\\My Drive\\Thesis\\Experiments\\2021-2022 Density Experiments\\TEMP\\mike-density-200k-20.zip')
+
+    # fix_bulk_zip_files_with_bad_formatting(main_dir_to_zip_files="C:\\Users\\User\\Downloads\\NewDensityExperiments\\Original",
+    #                                        dir_to_save_fixed_files="C:\\Users\\User\\Downloads\\NewDensityExperiments\\Fixed")
+    # fix_tiff_stack_naming_format('C:\\Users\\User\\Downloads\\Mike-Density-25K-2\\Mike_Density_25K_2', '_')
+
+    # add new markers and colors for plots
+    # json_dir_path = 'C:\\Users\\User\\PycharmProjects\\CellDeathQuantification\\config_files'
+    #  # = {}
+    # for file_name, treatment_name_and_val_to_add in zip(['treatment_to_color_dict_path.txt',
+    #                                                      'treatment_to_marker_dict_path.txt'],
+    #                                                     [{'autonomous': [1, 0, 1, 1],
+    #                                                       'non_autonomous':[0, 1, 0, 1]},
+    #                                                      {'autonomous': 'X',
+    #                                                      'non_autonomous': 's'}]):
+    #     json_path = os.sep.join([json_dir_path, file_name])
+    #     add_values_to_json(path=json_path, kwargs_to_add=treatment_name_and_val_to_add)
+
+    # create a json which defines treatments as autonomous or non-autonomous
+    # path = 'C:\\Users\\User\\PycharmProjects\\CellDeathQuantification\\config_files\\treatment_to_autonomously.txt'
+    # treatment_to_autonomously_dict = {
+    #     'DMEM/F12-AA+400uM FAC&BSO': 'non_autonomous',
+    #     'MCF10A sgCx43-2A,DMEM/F12-AA+400uM FAC&BSO': 'non_autonomous',
+    #     "RPMI-AA+15uM aMSH C' dots": 'non_autonomous',
+    #     'DMEM-AA+400uM FAC&BSO': 'non_autonomous',
+    #     'RPMI+400uM FAC&BSO': 'non_autonomous',
+    #     'DMEM-AA+5uM ML162': 'autonomous',
+    #     'DMEM + 1mM H2O2': 'autonomous',
+    #     'MCF10A,DMEM/F12-AA+35uM ML162': 'autonomous',
+    #     'DMEM + 400uM FAC&BSO': 'non_autonomous',
+    #     'DMEM+7.5uM erastin': 'non_autonomous',
+    #     'RPMI+20ng/mL TNFa+1uM SMAC + 20uM zVAD': 'autonomous',
+    #     'DMEM/F12+50ng/mL superkiller TRAIL': 'autonomous',
+    #     'DMEM + 400uM FAC&BSO + 20mM PEG1450': 'non_autonomous',
+    #     'DMEM + 400uM FAC&BSO + 20mM PEG3350': 'non_autonomous',
+    #     '"DMEM + 4uM ML162 (plastic, no oil)"': 'autonomous',
+    #     'ferroptosis_simulation': 'non_autonomous',
+    #     'apoptosis_simulation': 'autonomous',
+    #     'ferroptosis_attempt_no_healing_factor': 'non_autonomous',
+    #     'apoptosis_attempt_no_healing_factor': 'autonomous',
+    #     'ferroptosis_attempt_HIGH_healing_factor': 'non_autonomous',
+    # }
+    # write_dict_as_json(path=path, dict_to_write=treatment_to_autonomously_dict)
+
+

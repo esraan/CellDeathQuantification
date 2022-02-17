@@ -1,0 +1,2 @@
+analyzed directory path:C:\Users\User\PycharmProjects\CellDeathQuantification\Data\Experiments_XYT_CSV\OriginalTimeMinutesData
+Experiments with P(Nuc)+P(Prop)<1 : 

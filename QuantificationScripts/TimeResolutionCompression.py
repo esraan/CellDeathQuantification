@@ -12,6 +12,9 @@ def compress_single_file_temporal_resolution_given_compression_factor(file_path:
     compression_factor argument.
     if kwargs.save_compressed_df argument is set to True, saves the compressed version under the appropriate
     directory.
+    if kwargs.save_df_in_original_dir argument is set to True, saves the compressed version under the original directory
+    of the file, adding the "compressed_to_X" postfix, where X=new temporal resolution. The function also adds the
+    new filename to the meta data file with the treatment postfix "compressed_to_X" with the same X value.
     :param file_path: str
     :param compression_factor: int, the
     :param kwargs:
@@ -20,7 +23,11 @@ def compress_single_file_temporal_resolution_given_compression_factor(file_path:
     # todo: test the function
     assert file_path, f'either file_path or file_df should be provided, but file_path is f{file_path}'
     save_df = kwargs.get('save_compressed_df', False)
+    save_df_in_original_dir = kwargs.get('save_df_in_original_dir', False) * save_df
+    meta_data_file_path = kwargs.get('meta_data_full_file_path', METADATA_FILE_FULL_PATH)
+
     file_name = file_path.split(os.sep)[-1]
+    file_dir_path = os.sep.join(file_path.split(os.sep)[:-1])
 
     exp_treatment, exp_explicit_temporal_res = get_exp_treatment_type_and_temporal_resolution(exp_file_name=file_name,
                                                                                               compressed_flag=False)
@@ -46,7 +53,22 @@ def compress_single_file_temporal_resolution_given_compression_factor(file_path:
         time_idx += 1
 
     if save_df:
-        compressed_file_path = os.sep.join([compression_level_dir, file_name])
+        if not save_df_in_original_dir:
+            compressed_file_path = os.sep.join([compression_level_dir, file_name])
+        else:
+            new_file_name = f"{file_name.replace('.csv', '')}_compressed_to_{new_temporal_res}.csv"
+            new_treatment_name = exp_treatment #f"{exp_treatment}_compressed_to_{new_temporal_res}"
+            compressed_file_path = os.path.join(file_dir_path, new_file_name)
+            # updating the meta data file
+            meta_data_df = pd.read_csv(meta_data_file_path, index_col=None)
+            meta_data_df = meta_data_df.drop(columns=['Unnamed: 0.1','Unnamed: 0'], errors='ignore')
+            new_exp_row = meta_data_df[meta_data_df['File Name']==file_name].copy()
+            new_exp_row['File Name'] = new_file_name
+            new_exp_row['Treatment'] = new_treatment_name
+            new_exp_row['Time Interval (min)'] = new_temporal_res
+            meta_data_df = meta_data_df.append(new_exp_row)
+            meta_data_df.to_csv(meta_data_file_path)
+
         compressed_df.to_csv(compressed_file_path)
 
     return compressed_df
@@ -67,6 +89,7 @@ def compress_all_files_in_dir_temporal_resolution_given_compression_factor(dir_p
     """
     save_df = kwargs.get('save_compressed_df', False)
     print_progression_flag = kwargs.get('print_progression', False)
+    compress_resolutions_constraint = kwargs.get('compress_resolutions_constraint', None)
 
     all_files_full_paths, only_exp_names = get_all_paths_csv_files_in_dir(dir_path=dir_path)
 
@@ -76,6 +99,13 @@ def compress_all_files_in_dir_temporal_resolution_given_compression_factor(dir_p
         all_compressed_dfs = None
 
     for file_idx, full_single_file_path in enumerate(all_files_full_paths):
+        file_name = full_single_file_path.split(os.sep)[-1]
+        exp_treatment, exp_explicit_temporal_res = get_exp_treatment_type_and_temporal_resolution(
+            exp_file_name=file_name,
+            compressed_flag=False)
+        if compress_resolutions_constraint is not None and exp_explicit_temporal_res != compress_resolutions_constraint:
+            continue
+
         if print_progression_flag:
             print(f'file name {full_single_file_path.split(os.sep)[-1]}')
         single_file_compressed_df = compress_single_file_temporal_resolution_given_compression_factor(
@@ -123,16 +153,29 @@ if __name__ == '__main__':
     #                                                                                   save_compressed_df=True,
     #                                                                                   compression_factor=8)
 
-    # entire directory compression - single compression factor
+    # # entire directory compression - single compression factor
     # dir_path = '..\\Data\\Experiments_XYT_CSV\\OriginalTimeMinutesData'
     # compress_all_files_in_dir_temporal_resolution_given_compression_factor(dir_path=dir_path,
-    #                                                                        compression_factor=5,
+    #                                                                        compression_factor=2,
     #                                                                        save_compressed_df=True)
+    #
+    # # entire directory compression - range of compression factor
+    # dir_path = '..\\Data\\Experiments_XYT_CSV\\OriginalTimeMinutesData'
+    # compress_all_files_in_dir_temporal_resolution_given_compression_factor_range(dir_path=dir_path,
+    #                                                                              compression_factor_range=(2, 10),
+    #                                                                              save_compressed_df=True,
+    #                                                                              print_progression=True)
 
-    # entire directory compression - range of compression factor
+    # only 15 minutes experiments compression
     dir_path = '..\\Data\\Experiments_XYT_CSV\\OriginalTimeMinutesData'
-    compress_all_files_in_dir_temporal_resolution_given_compression_factor_range(dir_path=dir_path,
-                                                                                 compression_factor_range=(2, 10),
-                                                                                 save_compressed_df=True,
-                                                                                 print_progression=True)
+    meta_data_full_file_path = 'C:\\Users\\User\\PycharmProjects\\CellDeathQuantification\\Data\\Experiments_XYT_CSV\\ExperimentsMetaData.csv'
+    compress_all_files_in_dir_temporal_resolution_given_compression_factor(
+        dir_path=dir_path,
+        compression_factor=2,
+        save_compressed_df=True,
+        save_df_in_original_dir=True,
+        meta_data_full_file_path=meta_data_full_file_path,
+        compress_resolutions_constraint=15
+    )
+
     pass

@@ -1,3 +1,4 @@
+import copy
 import os
 from typing import *
 
@@ -451,6 +452,7 @@ def calc_and_visualize_all_experiments_csvs_in_dir(dir_path: str = None,
     only_recent_death_flag_for_neighbors_calc = kwargs.get('only_recent_death_flag_for_neighbors_calc',
                                                            RECENT_DEATH_ONLY_FLAG)
     treatments_to_include = kwargs.get('treatments_to_include', 'all')
+    temporal_resolutions_to_include = kwargs.get('temporal_resolutions_to_include', [30])
 
     single_exp_visualize_flag = kwargs.get('visualize_each_exp_flag', False)
 
@@ -494,7 +496,8 @@ def calc_and_visualize_all_experiments_csvs_in_dir(dir_path: str = None,
 
         # skip un-wanted treatments
         if treatments_to_include != 'all' and \
-                verify_any_str_from_lst_in_specific_str(exp_treatment, treatments_to_include):
+                verify_any_str_from_lst_in_specific_str(exp_treatment, treatments_to_include) \
+                or int(exp_temporal_res) not in temporal_resolutions_to_include:
             continue
 
         p_nuc_by_time, p_prop_by_time, p_nuc_global, p_prop_global, \
@@ -1150,15 +1153,19 @@ def calc_time_difference_of_adjacent_death_in_single_experiment(
         **kwargs) -> Tuple[np.array, float]:
     """
     calculates the distribution and mean value of time differences between adjacent cells' deaths.
-    all temporal values are in minutes
+    all temporal values are in minutes.
+    use the kwargs 'return_adjacent_death_diff_times_for_each_cell' set to True to return
+    the adjacent death time differences for each cell (instead of histogram of distribution)
     :param cells_neighbors: list of all cells' neighbors (by their indices), list of list
     :param cells_times_of_death: np.array of times of death in minutes for each cell.
     :param kwargs:
-    :return: np.array adjacent death time differences distribution(hist), float - mean value of distribution.
+    :return: np.array adjacent death time differences [/distribution(hist)], float - mean value of distribution.
     """
     visualize_flag = kwargs.get('visualize_flag', False)
     bins_as_minutes = kwargs.get('bins_of_adjacent_death_diff', None)
-    pre_normalization = kwargs.get('normalize_time_of_death', True)
+    pre_normalization = kwargs.get('normalize_time_of_death', False)
+    return_adjacent_death_diff_times_for_each_cell = kwargs.get('return_adjacent_death_diff_times_mean_for_each_cell',
+                                                                False)
 
     if pre_normalization:
         cells_times_of_death_cpy = cells_times_of_death.copy()
@@ -1169,7 +1176,7 @@ def calc_time_difference_of_adjacent_death_in_single_experiment(
     # to avoid taking into account the same cells multiple times, a set of examined cells
     # is kept
     examined_cells = set()
-    total_adjacent_death_time_diffs = []
+    total_adjacent_death_time_diffs, total_adjacent_death_time_diffs_means = [], []
     for curr_cell_idx, curr_cell_death in enumerate(cells_times_of_death):
         curr_cell_neighbors = cells_neighbors[curr_cell_idx]
 
@@ -1178,6 +1185,8 @@ def calc_time_difference_of_adjacent_death_in_single_experiment(
             cell_adjacent_death_times = cells_times_of_death[neighbors_death_mask].flatten()
             cell_adjacent_death_times_diff_from_curr_cell_death = cell_adjacent_death_times - curr_cell_death
             total_adjacent_death_time_diffs += cell_adjacent_death_times_diff_from_curr_cell_death.tolist()
+        total_adjacent_death_time_diffs_means += [cell_adjacent_death_times_diff_from_curr_cell_death.mean()] if len(
+            neighbors_death_mask) > 0 else [0]
         examined_cells.update([curr_cell_idx])
 
     total_adjacent_death_time_diffs = np.array(total_adjacent_death_time_diffs)
@@ -1202,6 +1211,9 @@ def calc_time_difference_of_adjacent_death_in_single_experiment(
                                       x_tick_labels=x_tick_labels,
                                       path_to_dir_to_save=dir_path,
                                       fig_name=f'{exp_name}')
+
+    if return_adjacent_death_diff_times_for_each_cell:
+        return np.array(total_adjacent_death_time_diffs_means), mean_of_adjacent_death_diff
 
     return total_adjacent_death_time_diffs_hist, mean_of_adjacent_death_diff
 
@@ -1292,19 +1304,21 @@ def calc_multiple_exps_measurements(main_exp_dir_full_path: str,
     :param main_exp_dir_full_path:
     :param limit_exp_num:
     :param kwargs:
-    :return:
+    :return: all_endpoint_readouts_by_experiment, all_exps_treatments, all_exps_global_densities
     """
     ######
     # getting all kwargs
     visualize_flag = kwargs.get('visualize_flag', False)
     visualize_each_exp_flag = kwargs.get('visualize_each_exp_flag', False)
     treatments_to_include = kwargs.get('treatments_to_include', 'all')
+    temporal_resolutions_to_include = kwargs.get('temporal_resolutions_to_include', [30])
     meta_data_file_full_path = kwargs.get('metadata_file_full_path', METADATA_FILE_FULL_PATH)
     compressed_flag = kwargs.get('use_compressed_exps_data_flag', False)
     neighbors_threshold_dist = kwargs.get('neighbors_threshold_dist', DIST_THRESHOLD_IN_PIXELS)
     use_sliding_time_window = kwargs.get('use_sliding_time_window', False)
     type_of_measurement = kwargs.get('type_of_measurement', 'adjacent_death_time_difference').lower()
     fig_name_suffix = kwargs.get('fig_name_suffix', '')
+    include_simulations_data_flag = kwargs.get('include_simulations_data_flag', False)
 
     if use_sliding_time_window:
         sliding_time_window_size_in_min = kwargs.get('sliding_time_window_size_in_min', 100)
@@ -1319,7 +1333,7 @@ def calc_multiple_exps_measurements(main_exp_dir_full_path: str,
 
     total_exps = len(all_files_to_analyze_only_exp_names)
 
-    all_endpoint_readouts_by_experiment, all_exps_names, all_exps_treatments, all_exps_densities = list(), list(), list(), list()
+    all_endpoint_readouts_by_experiment, all_exps_names, all_exps_treatments, all_exps_global_densities = list(), list(), list(), list()
 
     single_exp_kwargs = kwargs.copy()
     single_exp_kwargs['visualize_flag'] = visualize_each_exp_flag
@@ -1336,13 +1350,15 @@ def calc_multiple_exps_measurements(main_exp_dir_full_path: str,
                                                            get_exp_density=True)
 
         # skip un-wanted treatments
-        if treatments_to_include != 'all' and \
-                verify_any_str_from_lst_in_specific_str(exp_treatment, treatments_to_include):
+        if (treatments_to_include != 'all' and \
+            verify_any_str_from_lst_in_specific_str(exp_treatment, treatments_to_include)) or (
+                not include_simulations_data_flag and ('ferroptosis' in exp_treatment or 'apoptosis' in exp_treatment)) \
+                or int(explicit_temporal_resolution) not in temporal_resolutions_to_include:
             continue
 
         all_exps_names.append(exp_name)
         all_exps_treatments.append(exp_treatment)
-        all_exps_densities.append(exp_density)
+        all_exps_global_densities.append(exp_density)
 
         print(f'Calculating {type_of_measurement} for experiment: {exp_name} | Progress: {exp_idx + 1}/{total_exps}')
         exp_df = pd.read_csv(single_exp_full_path)
@@ -1391,11 +1407,11 @@ def calc_multiple_exps_measurements(main_exp_dir_full_path: str,
             measurement_endpoint_readout = single_exp_spi_calculator.get_spis()
 
         elif type_of_measurement == 'density':
-            type_of_density = kwargs.get('type_of_density', 'distance_density')
             measurement_endpoint_readout, cells_local_density = calculate_local_cell_density_single_experiment(
-                cells_xy=cells_xy,
+                cells_loci=cells_xy,
+                cells_times_of_death=cells_times_of_death,
                 cells_neighbors=cells_neighbors_lvl1,
-                type_of_density=type_of_density
+                **kwargs
             )
 
         all_endpoint_readouts_by_experiment.append(measurement_endpoint_readout)
@@ -1419,7 +1435,7 @@ def calc_multiple_exps_measurements(main_exp_dir_full_path: str,
                                             measurement_type=type_of_measurement,
                                             fig_name_suffix=fig_name_suffix)
 
-        return all_endpoint_readouts_by_experiment, all_exps_treatments, all_exps_densities
+    return all_endpoint_readouts_by_experiment, all_exps_treatments, all_exps_global_densities
 
 
 def calc_pnuc_vs_measurement_for_all_experiments(main_exp_dir_full_path: str,
@@ -1448,76 +1464,98 @@ def calc_pnuc_vs_measurement_for_all_experiments(main_exp_dir_full_path: str,
     measurement_type = kwargs.get('type_of_measurement', 'adjacent_death_time_difference')
     cluster_evaluation_flag = kwargs.get('evaluate_clustering_per_treatment', False)
     cluster_evaluation_method = kwargs.get('cluster_evaluation_method', 'silhouette_coefficient')
+    use_prev_calc_flag = kwargs.get('use_prev_calc_flag', USE_PREV_CALCULATION)
+    treatments_to_include = kwargs.get('treatments_to_include', 'all')
 
-    # for readability, explicitly provide measurement type
-    kwargs.pop('type_of_measurement')
+    use_autonomousity_labels = kwargs.get('use_autonomousity_labels_flag', USE_AUTONOMOUSITY_LABELS)
+    if use_autonomousity_labels:
+        treatments_to_autonomousity_json_path = kwargs.get('autonomousity_labels_json_path',
+                                                           TREATMENTS_TO_AUTONOMOUSITY_JSON_PATH)
 
+    p_nuc_file_name = f'pnuc_prev_calc_res_treatments_{"$".join(sorted(treatments_to_include))}.npy'
+    p_nuc_prev_calculation_file_path = os.sep.join([PREV_CALCULATIONS_DIR, p_nuc_file_name])
+    measurement_file_name = f'{measurement_type}_prev_calc_res_treatments_{"$".join(sorted(treatments_to_include))}.npy'
+    measurement_prev_calculation_file_path = os.sep.join([PREV_CALCULATIONS_DIR, measurement_file_name])
+    treatments_labels_file_name = f'treatment_labels_prev_calc_res_treatments_{"$".join(sorted(treatments_to_include))}.npy'
+    treatments_labels_prev_calculation_file_path = os.sep.join([PREV_CALCULATIONS_DIR, treatments_labels_file_name])
 
-    # P Nuc calculation
-    all_global_p_nuc, \
-    all_global_p_prop, \
-    all_measurements_exps_treatments = calc_and_visualize_all_experiments_csvs_in_dir(
-        dir_path=main_exp_dir_full_path,
-        limit_exp_num=limit_exp_num,
-        **kwargs
-    )
-    if measurement_type == 'spi':
-        # SPI calculation
-        all_spi_readouts_by_experiment, all_spi_exps_treatments, exp_densities = calc_multiple_exps_measurements(
-            main_exp_dir_full_path,
-            limit_exp_num,
-            type_of_measurement='spi',
+    if use_prev_calc_flag:
+        all_global_p_nuc = None
+        if os.path.isfile(p_nuc_prev_calculation_file_path):
+            try:
+                all_global_p_nuc = np.load(p_nuc_prev_calculation_file_path)
+            except FileNotFoundError as e:
+                Warning(f'No global P(Nuc) previous calculations results file found!')
+
+        all_measurement_endpoint_readouts_by_experiment = None
+        if os.path.isfile(measurement_prev_calculation_file_path):
+            try:
+                all_measurement_endpoint_readouts_by_experiment = np.load(measurement_prev_calculation_file_path)
+            except FileNotFoundError as e:
+                Warning(f'No global {measurement_type} previous calculations results file found!')
+
+        treatments_labels = None
+        if os.path.isfile(treatments_labels_prev_calculation_file_path):
+            try:
+                treatments_labels = np.load(treatments_labels_prev_calculation_file_path)
+            except FileNotFoundError as e:
+                Warning(f'No treatment labels of previous calculations results file found!')
+
+        if treatments_labels is None or all_global_p_nuc is None or all_measurement_endpoint_readouts_by_experiment is None:
+            use_prev_calc_flag = False
+
+    if not use_prev_calc_flag:
+        # for readability, explicitly provide measurement type
+        kwargs.pop('type_of_measurement')
+
+        # P Nuc calculation
+        all_global_p_nuc, \
+        all_global_p_prop, \
+        treatments_labels = calc_and_visualize_all_experiments_csvs_in_dir(
+            dir_path=main_exp_dir_full_path,
+            limit_exp_num=limit_exp_num,
             **kwargs
         )
-        # spi_and_measurement_correlation = calc_correlation(all_global_p_nuc,
-        #                                                    all_spi_readouts_by_experiment)
-        p_nuc_and_measurement_correlation = calc_correlation(all_global_p_nuc,
-                                                     all_spi_readouts_by_experiment)
 
-        print(f'Correlation between P(Nuc) and {measurement_type} is: {p_nuc_and_measurement_correlation}')
-        # print(f'Correlation between SPI and {measurement_type} is: {spi_and_measurement_correlation}')
-
-        if (all_spi_exps_treatments != all_measurements_exps_treatments).all():
-            raise RuntimeError('calculation of spi and p nuc are not aligned, sort by exp name!')
-        if cluster_evaluation_flag:
-            clustering_score = clusters_evaluation(
-                x_values=all_global_p_nuc,
-                y_values=all_spi_readouts_by_experiment,
-                clustering_labels=all_measurements_exps_treatments,
-                cluster_evaluation_method=cluster_evaluation_method
-            )
-    else:
         # None P(Nuc) measurement calculation
-        all_measurement_endpoint_readouts_by_experiment, all_measurements_exps_treatments, exp_densities = calc_multiple_exps_measurements(
+        all_measurement_endpoint_readouts_by_experiment, treatments_labels, exp_densities = calc_multiple_exps_measurements(
             main_exp_dir_full_path,
             limit_exp_num,
             type_of_measurement=measurement_type,
             **kwargs
         )
+        # saving the calculation results:
+        if not os.path.isdir(PREV_CALCULATIONS_DIR):
+            os.makedirs(PREV_CALCULATIONS_DIR)
 
-        p_nuc_and_measurement_correlation = calc_correlation(all_measurement_endpoint_readouts_by_experiment,
-                                                             all_global_p_nuc)
+        np.save(p_nuc_prev_calculation_file_path, all_global_p_nuc)
+        np.save(measurement_prev_calculation_file_path, all_measurement_endpoint_readouts_by_experiment)
+        np.save(treatments_labels_prev_calculation_file_path, treatments_labels)
 
-        # normalized_exp_densities = normalize(values=exp_densities, normalization_method='min_max')
+    p_nuc_and_measurement_correlation = calc_correlation(all_measurement_endpoint_readouts_by_experiment,
+                                                         all_global_p_nuc)
 
-        print(f'Correlation between P(Nuc) and {measurement_type} is: {p_nuc_and_measurement_correlation}')
+    # normalized_exp_densities = normalize(values=exp_densities, normalization_method='min_max')
 
-        if cluster_evaluation_flag:
-            clustering_score = clusters_evaluation(
-                x_values=all_global_p_nuc,
-                y_values=all_measurement_endpoint_readouts_by_experiment,
-                clustering_labels=all_measurements_exps_treatments,
-                cluster_evaluation_method=cluster_evaluation_method
-            )
+    print(f'Correlation between P(Nuc) and {measurement_type} is: {p_nuc_and_measurement_correlation}')
 
     if cluster_evaluation_flag:
+        clustering_score = clusters_evaluation(
+            x_values=all_global_p_nuc,
+            y_values=all_measurement_endpoint_readouts_by_experiment,
+            clustering_labels=treatments_labels,
+            cluster_evaluation_method=cluster_evaluation_method
+        )
+
         clustering_score_str = f'{measurement_type} clustering score: {clustering_score}'
         print(clustering_score_str)
 
-    # if (all_p_nuc_treatment_types != all_measurements_exps_treatments).all():
-    #     raise RuntimeError('calculation of measurement and p nuc are not aligned, sort by exp name!')
-
     if visualize_flag:
+        if use_autonomousity_labels:
+            treatments_to_autonomousity_dict = load_dict_from_json(path=treatments_to_autonomousity_json_path)
+            treatments_labels = np.array(list(map(
+                lambda treatment_name: treatments_to_autonomousity_dict[treatment_name], treatments_labels)))
+
         full_dir_path_to_save_fig = os.sep.join(
             [RESULTS_MAIN_DIR, 'MeasurementsEndpointReadoutsPlots',
              'ComparisonBetweenMeasurements']) if full_dir_path_to_save_fig is None else full_dir_path_to_save_fig
@@ -1527,27 +1565,27 @@ def calc_pnuc_vs_measurement_for_all_experiments(main_exp_dir_full_path: str,
             clustering_postfix = ''
         all_global_p_nuc = np.array(all_global_p_nuc)
         if measurement_type == 'spi':
-            all_spi_readouts_by_experiment = np.array(all_spi_readouts_by_experiment)
-            visualize_endpoint_readouts_by_treatment_about_readouts(x_readout=all_global_p_nuc,
-                                                                    y_readout=all_spi_readouts_by_experiment,
-                                                                    treatment_per_readout=all_measurements_exps_treatments,
+            all_measurement_endpoint_readouts_by_experiment = np.array(all_measurement_endpoint_readouts_by_experiment)
+            visualize_endpoint_readouts_by_treatment_about_readouts(y_readout=all_global_p_nuc,
+                                                                    x_readout=all_measurement_endpoint_readouts_by_experiment,
+                                                                    treatment_per_readout=treatments_labels,
                                                                     full_dir_path_to_save_fig=full_dir_path_to_save_fig,
-                                                                    x_label='Fraction of Nucleators',
-                                                                    y_label='SPI',
+                                                                    y_label='Fraction of Nucleators',
+                                                                    x_label='SPI',
                                                                     fig_title=f'Fraction of Nucleators about\n {"SPI"}\ncorrelation:{p_nuc_and_measurement_correlation}{clustering_postfix}',
-                                                                    use_log=False,
-                                                                    set_y_lim=False,
-                                                                    show_legend=True,
+                                                                    use_log=kwargs.get('use_log', False),
+                                                                    set_y_lim=kwargs.get('set_y_lim', False),
+                                                                    show_legend=kwargs.get('show_legend', True),
                                                                     fig_name_to_save=f'fraction_of_nuc_about_{"SPI"}',
                                                                     **kwargs)
         else:
             all_measurement_endpoint_readouts_by_experiment = np.array(all_measurement_endpoint_readouts_by_experiment)
-            visualize_endpoint_readouts_by_treatment_about_readouts(x_readout=all_global_p_nuc,
-                                                                    y_readout=all_measurement_endpoint_readouts_by_experiment,
-                                                                    treatment_per_readout=all_measurements_exps_treatments,
+            visualize_endpoint_readouts_by_treatment_about_readouts(y_readout=all_global_p_nuc,
+                                                                    x_readout=all_measurement_endpoint_readouts_by_experiment,
+                                                                    treatment_per_readout=treatments_labels,
                                                                     full_dir_path_to_save_fig=full_dir_path_to_save_fig,
-                                                                    x_label=f'Fraction of Nucleators',
-                                                                    y_label=measurement_type,
+                                                                    y_label=f'Fraction of Nucleators',
+                                                                    x_label=measurement_type,
                                                                     fig_title=f'Fraction of Nucleators about\n {measurement_type}\ncorrelation:{p_nuc_and_measurement_correlation}{clustering_postfix}',
                                                                     use_log=False,
                                                                     set_y_lim=False,
@@ -1582,220 +1620,977 @@ def calc_pnuc_vs_measurement_for_all_experiments(main_exp_dir_full_path: str,
         #                                                                **kwargs)
 
 
-def calculate_local_cell_density_single_experiment(cells_xy: pd.DataFrame, cells_neighbors: List[List[int]],
-                                                   type_of_density: str = 'vanilla') -> Tuple[float, np.array]:
+def calculate_local_cell_density_single_experiment(cells_loci: pd.DataFrame, cells_neighbors: List[List[int]],
+                                                   cells_times_of_death: Union[pd.DataFrame, np.array],
+                                                   type_of_density: str = 'vanilla',
+                                                   **kwargs) -> Tuple[float, np.array]:
     """
     possible types of density calculations for cell i:
-        vanilla - the fraction of cells neighboring cell i of all cells in the experiment
+        vanilla_density - the fraction of cells neighboring cell i of all cells in the experiment
         distance_density - the averaged normalized distance of cell i's all neighboring cells
-    :param cells_xy:
+        density_non_normalized_number_of_neighbors - Density as continuous non-normalized number of neighbors.
+        density_distance_to_closest_neighbor - The non-normalized distance to the closest neighbor
+    :param cells_loci:
     :param cells_neighbors:
     :param type_of_density:
     :return:
     """
-    total_number_of_cells = len(cells_xy)
-    normalized_cell_loci = np.vstack((normalize(cells_xy[:, 0]), normalize(cells_xy[:, 1])))
+    normalize_loci_flag = kwargs.get('normalize_loci_flag', False)
 
-    all_cells_densities = np.zeros_like(cells_xy[:, 0])
+    total_number_of_cells = len(cells_loci)
 
-    for cell_idx, cell_loci in enumerate(cells_xy):
+    if normalize_loci_flag:
+        cells_loci = np.vstack((normalize(cells_loci[:, 0]), normalize(cells_loci[:, 1]))).T
+
+    all_cells_densities = np.zeros_like(cells_loci[:, 0])
+
+    for cell_idx, cell_loci in enumerate(cells_loci):
         cell_neighbors_lst = cells_neighbors[cell_idx]
         if len(cell_neighbors_lst) == 0:
             continue
         cell_density = None
-        if type_of_density == 'vanilla':
+        if type_of_density == 'vanilla_density':
             cell_density = len(cell_neighbors_lst) / total_number_of_cells
-        elif type_of_density == 'distance_density':
-            all_neighboring_cells_loci = normalized_cell_loci[:, tuple(cell_neighbors_lst)]
+
+        elif 'distance_density' == type_of_density:
+            all_neighboring_cells_loci = cells_loci[tuple(cell_neighbors_lst), :]
             cell_accumulated_neighbors_distance = 0
-            for neighbor_loci in all_neighboring_cells_loci.T:
+            for neighbor_loci in all_neighboring_cells_loci:
                 cell_accumulated_neighbors_distance += get_euclidean_distance_between_cells_in_pixels(
-                    normalized_cell_loci[:, cell_idx], neighbor_loci)
+                    cells_loci[cell_idx, :], neighbor_loci)
             cell_density = cell_accumulated_neighbors_distance / len(all_neighboring_cells_loci)
+
+        elif 'density_non_normalized_number_of_neighbors' == type_of_density:
+            cell_density = len(cell_neighbors_lst)
+
+        elif 'density_fraction_of_dead_of_neighbors' == type_of_density:
+            cell_tod = cells_times_of_death[cell_idx]
+            cell_density = len(cells_times_of_death[[cell_neighbors_lst]] < cell_tod) / len(cell_neighbors_lst)
+
+        elif 'density_distance_to_closest_neighbor' == type_of_density:
+            all_neighboring_cells_loci = cells_loci[tuple(cell_neighbors_lst), :]
+            closest_neighbor_distance = float('inf')
+            for neighbor_loci in all_neighboring_cells_loci:
+                curr_neighbor_distance = get_euclidean_distance_between_cells_in_pixels(
+                    cells_loci[cell_idx, :], neighbor_loci)
+                closest_neighbor_distance = min([closest_neighbor_distance, curr_neighbor_distance])
+            cell_density = closest_neighbor_distance
+
         all_cells_densities[cell_idx] = cell_density
+
+    if type_of_density == 'normalized_min_max_distance_density':
+        all_cells_densities = normalize(all_cells_densities, normalization_method='min_max')
+
+    if type_of_density == 'inverse_distance_density':
+        all_cells_densities = np.divide(1, all_cells_densities / 10, out=np.zeros_like(all_cells_densities),
+                                        where=all_cells_densities != 0)
     average_density = all_cells_densities.mean()
     return average_density, all_cells_densities
 
 
-if __name__ == '__main__':
-    # recent dead only flag
-    # calc_rmse_between_experiments_results_of_altering_flag_values(dir_path=os.sep.join(
-    #     os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV',
-    #                                       'OriginalTimeMinutesData']))  #, limit_exp_num=10)
-    # compression flag
-    # calc_rmse_between_experiments_results_of_altering_flag_values(flag_key='dir_path',
-    #                                                               flag_values=(os.sep.join(
-    #                                                                   os.getcwd().split(os.sep)[:-1] + ['Data',
-    #                                                                                                     'Experiments_XYT_CSV',
-    #                                                                                                     'OriginalTimeMinutesData']),
-    #                                                                            os.sep.join(
-    #                                                                                os.getcwd().split(os.sep)[:-1] + [
-    #                                                                                    'Data', 'Experiments_XYT_CSV',
-    #                                                                                    'CompressedTime_XYT_CSV'])))
-    # compression flag
-    # calc_and_visualize_all_experiments_csvs_in_dir_with_altering_flag_values(flag_key='dir_path',
-    #                                                                          flag_values=(os.sep.join(
-    #     os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV',
-    #                                       'OriginalTimeMinutesData']), os.sep.join(
-    #     os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV',
-    #                                       'CompressedTime_XYT_CSV'])))
-    #
-    # MULTIPLE EXPERIMENTS
-    # calc_and_visualize_all_experiments_csvs_in_dir(limit_exp_num=float('inf'),
-    #                                                dir_path=os.sep.join(
-    #                                                    os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV',
-    #                                                                                      'OriginalTimeMinutesData']))
+def calculate_single_cell_to_neighbor_delta_TOD_about_distance(cells_xy: np.array,
+                                                               cells_neighbors: List[List[int]],
+                                                               cells_tod: np.array,
+                                                               exp_name: str,
+                                                               exp_treatment: str,
+                                                               **kwargs) -> Union[Tuple[np.ndarray, np.ndarray],
+                                                                                  Tuple[
+                                                                                      np.ndarray, np.ndarray, np.ndarray]]:
+    """
+    calculates the single cell2Neighbor delta in loci and delta in TOD.
+    :param cells_xy:
+    :param cells_neighbors:
+    :param cells_tod:
+    :param exp_name:
+    :param exp_treatment:
+    :param kwargs:
+    :return: Tuple[np.array, np.array] - per_neighbor_delta_tod, per_neighbor_delta_loci
+    """
+    normalize_loci_flag = kwargs.get('normalize_loci_flag', False)
+    calculate_mean_of_measurement = kwargs.get('calculate_mean_of_measurement', False)
+    visualize_flag = kwargs.get('visualize_flag', False)
 
-    # # single experiment testing
-    # path = '..\\Data\\Experiments_XYT_CSV\\CompressedTime_XYT_CSV\\20160909_b16f10_aMSH_xy37.csv'
-    # p_nuc_by_time, p_prop_by_time, p_nuc_global, p_prop_global, \
-    # all_frames_nucleators_mask, all_frames_propagators_mask,\
-    #     accumulated_fraction_of_death_by_time = calc_single_experiment_temporal_p_nuc_and_p_prop_and_endpoint_readouts(single_exp_full_path=path)
-    #
-    # visualize_cell_death_in_time(xyt_full_path=path, nucleators_mask=all_frames_nucleators_mask, exp_treatment='just_treatment', exp_name='just name')
-    #
-    # plot_measurements_by_time(p_nuc_by_time, p_prop_by_time, accumulated_fraction_of_death_by_time,
-    #                           temporal_resolution=15, exp_name='20180620_HAP1_erastin_xy1', exp_treatment='test_treat')
+    per_neighbor_delta_tod = list()
+    per_neighbor_delta_loci = list()
 
-    # plot kl-divergence between recent death only flags endpoint readouts
-    # kwargs = dict()
-    # kwargs['distance_metric'] = 'kl_divergence'
-    # kwargs['visualize_flag'] = True
-    # kwargs['visualize_specific_treatments'] = ['tnf', 'erastin', 'trail']
-    # dir_path = os.sep.join(
-    #     os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV',
-    #                                  'OriginalTimeMinutesData'])
-    # by_treatment_distance_metric_score_p_nuc, by_treatment_distance_metric_score_p_prop = \
-    #     calc_distance_metric_between_experiments_results_of_altering_flag_values(
-    #     dir_path=dir_path, **kwargs)
+    if calculate_mean_of_measurement:
+        neighbors_count_lst = list()
 
-    # single simulation xyt results testing
-    # path = '..\\Data\\Simulations_XYT_CSV\\apoptosis_attempts\\xyt_ferroptosis_attempt.csv'
-    # temporal_resolution = 15
-    # p_nuc_by_time, p_prop_by_time, p_nuc_global, p_prop_global, \
-    # all_frames_nucleators_mask, all_frames_propagators_mask,\
-    #     accumulated_fraction_of_death_by_time = \
-    #     calc_single_experiment_temporal_p_nuc_and_p_prop_and_endpoint_readouts_provided_temporal_resolution(
-    #         single_exp_full_path=path, temporal_resolution=temporal_resolution)
-    #
-    # visualize_cell_death_in_time(xyt_full_path=path, nucleators_mask=all_frames_nucleators_mask, exp_treatment='just_treatment', exp_name='just name')
-    #
-    # plot_measurements_by_time(p_nuc_by_time, p_prop_by_time, accumulated_fraction_of_death_by_time,
-    #                           temporal_resolution=temporal_resolution, exp_name='simulation_test',
-    #                           exp_treatment='simulation')
+    examined_cells_indices = set()
 
-    ## single experiment probabilities per unit of time testing
-    # exp_path = 'C:\\Users\\User\\PycharmProjects\\CellDeathQuantification\\Data\\Experiments_XYT_CSV\\OriginalTimeMinutesData\\20160820_10A_FB_xy13.csv'
-    #
-    # calc_slopes_and_probabilities_per_unit_of_time_single_experiment(exp_full_path=exp_path,
-    #                                                                      exp_temporal_resolution=10,
-    #                                                                      exp_treatment='C dots',
-    #                                                                      unit_of_time_min=60,
-    #                                                                      consider_majority_of_death_only=True)
+    if normalize_loci_flag:
+        cells_xy = np.vstack((normalize(cells_xy[:, 0]), normalize(cells_xy[:, 1])))
 
-    # multiple experiments slopes and probabilities per unit of time testing
-    # dir_path = os.sep.join(os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV', 'OriginalTimeMinutesData'])
-    # calc_slopes_and_probabilities_per_unit_of_time_entire_dir(dir_full_path=dir_path,
-    #                                                           treatments_to_include='all',
-    #                                                           unit_of_time_min=60,
-    #                                                           consider_majority_of_death_only=True)
+    for curr_cell_idx, curr_cell_loci in enumerate(cells_xy):
+        curr_cell_neighbors_lst = cells_neighbors[curr_cell_idx]
+        # removing all previous examined cells from neighbors list
+        curr_cell_neighbors_lst = np.array(list(set(curr_cell_neighbors_lst) - examined_cells_indices))
 
-    # p_prop measurement as a fraction of adjacent dying cells in window:
-    # dir_path = os.sep.join(os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV', 'OriginalTimeMinutesData'])
-    # calc_multiple_exps_measurements(main_exp_dir_full_path=dir_path,
-    #                                 limit_exp_num=float('inf'),
-    #                                 use_sliding_time_window=True,
-    #                                 type_of_measurement='fraction_of_adjacent_death',
-    #                                 sliding_time_window_size_in_min=30,
-    #                                 visualize_flag=True,
-    #                                 treatments_to_include=['superkiller', 'fac', 'erastin', 'simulation'],#'all'
-    #                                 consider_death_within_window_only_flag=True)
-    # time of death differences between adjacent cells
-    # dir_path = os.sep.join(os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV', 'OriginalTimeMinutesData'])
-    # calc_multiple_exps_measurements(main_exp_dir_full_path=dir_path,
-    #                                 limit_exp_num=float('inf'),
-    #                                 use_sliding_time_window=False,
-    #                                 type_of_measurement='adjacent_death_time_difference',
-    #                                 bins_of_adjacent_death_diff=np.arange(0, 4, 0.5),
-    #                                 treatments_to_include=['superkiller', 'fac', 'erastin', 'simulation'],
-    #                                 visualize_flag=True,
-    #                                 visualize_each_exp_flag=False
-    #                                 )
+        if len(curr_cell_neighbors_lst) == 0:
+            continue
+        curr_cell_tod = cells_tod[curr_cell_idx]
 
-    # time of death variance between adjacent cells in sliding time windows
-    # dir_path = os.sep.join(os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV', 'OriginalTimeMinutesData'])
-    # calc_multiple_exps_measurements(main_exp_dir_full_path=dir_path,
-    #                                 limit_exp_num=float('inf'),
-    #                                 use_sliding_time_window=True,
-    #                                 sliding_time_window_size_in_min=100,
-    #                                 type_of_measurement='adjacent_death_time_variance',
-    #                                 # bins_of_adjacent_death_diff=np.arange(-10, 10, 1),
-    #                                 treatments_to_include=['superkiller', 'fac', 'erastin', 'simulation'],
-    #                                 visualize_flag=True,
-    #                                 visualize_each_exp_flag=False
-    #                                 )
+        all_neighboring_cells_tod = cells_tod[curr_cell_neighbors_lst].flatten()
+        all_neighboring_cells_loci = cells_xy[curr_cell_neighbors_lst, :]
 
-    # time of death variance between adjacent cells in an entire experiment
-    # dir_path = os.sep.join(os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV', 'OriginalTimeMinutesData'])
-    # calc_multiple_exps_measurements(main_exp_dir_full_path=dir_path,
-    #                                 limit_exp_num=float('inf'),
-    #                                 use_sliding_time_window=False,
-    #                                 type_of_measurement='adjacent_death_time_variance',
-    #                                 treatments_to_include=['superkiller', 'fac', 'erastin', 'simulation'],
-    #                                 visualize_flag=True,
-    #                                 visualize_each_exp_flag=False)
+        all_neighboring_cells_delta_tod = all_neighboring_cells_tod - curr_cell_tod
+        all_neighboring_cells_delta_loci = get_euclidean_distance_between_cells_in_pixels(all_neighboring_cells_loci,
+                                                                                          curr_cell_loci)
 
-    # p_nuc about adjacent death time difference measurement
-    dir_path = os.sep.join(os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV', 'OriginalTimeMinutesData'])
-    calc_pnuc_vs_measurement_for_all_experiments(main_exp_dir_full_path=dir_path,
-                                                 limit_exp_num=float('inf'),
-                                                 use_sliding_time_window=False,
-                                                 type_of_measurement='adjacent_death_time_difference',
-                                                 bins_of_adjacent_death_diff=np.arange(0, 4, 0.5),
-                                                 treatments_to_include=['superkiller', 'TNFa', 'h2O2'],
-                                                 cluster_evaluation_method='silhouette_coefficient',
-                                                 # silhouette_coefficient, # 'calinski_harabasz_index', # 'davies_bouldin_index'
-                                                 evaluate_clustering_per_treatment=True,
-                                                 # ['superkiller', 'TNFa', 'h2O2'] ,# ['fac&bso'], #['fac&bso', 'h2O2'], # ['superkiller', 'dots', 'h2O2', 'erastin']
-                                                 visualize_flag=True,
-                                                 visualize_each_exp_flag=False
-                                                 )
+        if calculate_mean_of_measurement:
+            neighbors_count_lst.append(len(all_neighboring_cells_delta_tod))
+            all_neighboring_cells_delta_tod = all_neighboring_cells_delta_tod.mean()
+            all_neighboring_cells_delta_loci = all_neighboring_cells_delta_loci.mean()
+            per_neighbor_delta_tod.append(all_neighboring_cells_delta_tod)
+            per_neighbor_delta_loci.append(all_neighboring_cells_delta_loci)
+        else:
+            per_neighbor_delta_tod = per_neighbor_delta_tod + all_neighboring_cells_delta_tod.tolist()
+            per_neighbor_delta_loci = per_neighbor_delta_loci + all_neighboring_cells_delta_loci.tolist()
 
-    # p_nuc about SPI measurement
-    dir_path = os.sep.join(os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV', 'OriginalTimeMinutesData'])
-    calc_pnuc_vs_measurement_for_all_experiments(main_exp_dir_full_path=dir_path,
-                                                 limit_exp_num=float('inf'),
-                                                 use_sliding_time_window=False,
-                                                 type_of_measurement='spi',
-                                                 bins_of_adjacent_death_diff=np.arange(0, 4, 0.5),
-                                                 treatments_to_include=['superkiller', 'TNFa', 'h2O2'],
-                                                 cluster_evaluation_method='silhouette_coefficient',
-                                                 # silhouette_coefficient, # 'calinski_harabasz_index', # 'davies_bouldin_index'
-                                                 evaluate_clustering_per_treatment=True,
-                                                 # ['superkiller', 'TNFa', 'h2O2'] ,# ['fac&bso'], #['fac&bso', 'h2O2'], # ['superkiller', 'dots', 'h2O2', 'erastin']
-                                                 visualize_flag=True,
-                                                 visualize_each_exp_flag=False
-                                                 )
+        examined_cells_indices.update([curr_cell_idx])
 
-    # p_nuc about mean local cell density measurement
-    dir_path = os.sep.join(os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV', 'OriginalTimeMinutesData'])
-    calc_pnuc_vs_measurement_for_all_experiments(main_exp_dir_full_path=dir_path,
-                                                 limit_exp_num=float('inf'),
-                                                 use_sliding_time_window=False,
-                                                 type_of_measurement='density',
-                                                 type_of_density='distance_density', # 'distance_density'/'vanilla'
-                                                 treatments_to_include=['superkiller', 'TNFa', 'h2O2'],
-                                                 cluster_evaluation_method='silhouette_coefficient',
-                                                 # silhouette_coefficient, # 'calinski_harabasz_index', # 'davies_bouldin_index'
-                                                 evaluate_clustering_per_treatment=True,
-                                                 # ['superkiller', 'TNFa', 'h2O2'] ,# ['fac&bso'], #['fac&bso', 'h2O2'], # ['superkiller', 'dots', 'h2O2', 'erastin']
-                                                 visualize_flag=True,
-                                                 visualize_each_exp_flag=False
-                                                 )
+    if not calculate_mean_of_measurement:
+        per_neighbor_delta_tod = np.array(per_neighbor_delta_tod)
+        per_neighbor_delta_loci = np.array(per_neighbor_delta_loci)
+        return per_neighbor_delta_tod, per_neighbor_delta_loci
+    else:
+        neighbors_count_lst = np.array(neighbors_count_lst)
+        per_neighbor_delta_tod = np.array(per_neighbor_delta_tod)
+        per_neighbor_delta_loci = np.array(per_neighbor_delta_loci)
+        return per_neighbor_delta_tod, per_neighbor_delta_loci, neighbors_count_lst
+
+
+def compare_two_experiments_tod_about_distance(exp_names: Sequence[str],
+                                               main_experiments_dir: str,
+                                               meta_data_file_path: str = 'C:\\Users\\User\\PycharmProjects\\CellDeathQuantification\\Data\\Experiments_XYT_CSV\\ExperimentsMetaData.csv',
+                                               **kwargs):
+    experiments_readouts = []
+
+    experiments_markers = kwargs.get('experiments_markers', ["s", "x"])
+    experiments_colors = kwargs.get('experiments_colors', [(0, 1, 0, 1), (1, 0, 1, .2)])
+    fig_x_label = kwargs.get('fig_x_label', 'distance from neighbor')
+    fig_y_label = kwargs.get('fig_y_label', 'delta tod from neighbor')
+    fig_title = kwargs.get('fig_title', 'Ferroptosis Vs. Apoptosis density effects')
+    neighbors_threshold_dist = kwargs.get('neighbors_threshold_dist', DIST_THRESHOLD_IN_PIXELS)
+
+    dir_to_save_fig_full_path = kwargs.get('dir_to_save_fig_full_path', os.sep.join(
+        ['C:\\Users\\User\\PycharmProjects\\CellDeathQuantification\\Results\\TemporalMeasurementsPlots',
+         'DeathPropagationAsFunctionOfDensity']))
+    measurement_type = kwargs.get('measurement_type', 'density')
+    calculate_mean_of_measurement = kwargs.get('calculate_mean_of_measurement', False)
+
+    for exp_name, exp_marker, exp_color in zip(exp_names, experiments_markers, experiments_colors):
+        experiment_readouts = {}
+        exp_treatment, exp_temporal_res, exp_density = get_exp_treatment_type_and_temporal_resolution(
+            exp_file_name=exp_name,
+            meta_data_file_full_path=meta_data_file_path,
+            get_exp_density=True)
+        print(f'exp:{exp_name}, temporal_res:{exp_temporal_res}, #cells: {exp_density}')
+        single_exp_path = os.sep.join([main_experiments_dir, exp_name])
+        single_exp_df = pd.read_csv(single_exp_path)
+        cells_loci, cells_tod = read_experiment_cell_xy_and_death_times(single_exp_path)
+        cells_neighbors1, cells_neighbors2, cells_neighbors3 = get_cells_neighbors(cells_loci,
+                                                                                   threshold_dist=neighbors_threshold_dist)
+        if not calculate_mean_of_measurement:
+            per_neighbor_delta_tod, per_neighbor_delta_loci = calculate_single_cell_to_neighbor_delta_TOD_about_distance(
+                cells_xy=cells_loci,
+                cells_neighbors=cells_neighbors1,
+                cells_tod=cells_tod,
+                exp_name='ferroptosis',
+                exp_treatment=exp_treatment,
+                normalize_loci_flag=False,
+                **kwargs)
+        else:
+            per_neighbor_delta_tod, per_neighbor_delta_loci, neighbors_counts = calculate_single_cell_to_neighbor_delta_TOD_about_distance(
+                cells_xy=cells_loci,
+                cells_neighbors=cells_neighbors1,
+                cells_tod=cells_tod,
+                exp_name='ferroptosis',
+                exp_treatment=exp_treatment,
+                normalize_loci_flag=False,
+                **kwargs)
+            neighbors_counts = neighbors_counts / neighbors_counts.max()
+            experiment_readouts['color_map'] = neighbors_counts
+        experiment_readouts['exp_name'] = exp_treatment
+        experiment_readouts['x_readout'] = per_neighbor_delta_loci
+        experiment_readouts['y_readout'] = per_neighbor_delta_tod
+        experiment_readouts['marker'] = exp_marker
+        experiment_readouts['plot_kwargs'] = {'color': exp_color}
+
+        experiments_readouts.append(experiment_readouts)
+
+    plot_multiple_experiments_temporal_readouts(
+        experiments_readouts=experiments_readouts,
+        fig_x_label=fig_x_label,
+        fig_y_label=fig_y_label,
+        fig_title=fig_title,
+        dir_to_save_fig_full_path=dir_to_save_fig_full_path,
+        measurement_type=measurement_type
+    )
+
+
+def calc_and_plot_2_measurements_temporal_readouts_for_multiple_experiments(measurements_types: List[str],
+                                                                            experiments_f_names: List[str],
+                                                                            main_exp_dir_full_path: str,
+                                                                            **kwargs):
+    """
+    Calculates the temporal readouts of multiple measurements for each experiment in 'experiments_f_names' argument.
+    :param measurements_types: list of measurements types as strings
+    :param experiments_f_names: list of the experiments file names with file type (e.g. 'expfname.csv')
+    :param main_exp_dir_full_path: string, the absolute path to the directory containing experiments files.
+    :param kwargs:
+    :return:
+    """
+    meta_data_file_full_path = kwargs.get('meta_data_file_full_path',
+                                          'C:\\Users\\User\\PycharmProjects\\CellDeathQuantification\\Data\\Experiments_XYT_CSV\\ExperimentsMetaData.csv')
+
+    full_dir_path_to_save_fig = kwargs.get('full_dir_path_to_save_fig', None)
+
+    neighbors_threshold_dist = kwargs.get('neighbors_threshold_dist', DIST_THRESHOLD_IN_PIXELS)
+
+    visualize_flag = kwargs.get('visualize_flag', False)
+    visualize_each_exp_flag = kwargs.get('visualize_each_exp_flag', False)
+
+    single_exp_kwargs = kwargs.copy()
+    single_exp_kwargs['visualize_flag'] = visualize_each_exp_flag
+
+    experiments_total_number = len(experiments_f_names)
+    experiments_treatments = []
+    exp_readouts_dictionaries = []
+
+    for exp_idx, exp_name in enumerate(experiments_f_names):
+        exp_full_path = os.sep.join([main_exp_dir_full_path, exp_name])
+
+        exp_treatment, explicit_temporal_resolution, exp_density = \
+            get_exp_treatment_type_and_temporal_resolution(exp_file_name=exp_name,
+                                                           meta_data_file_full_path=meta_data_file_full_path,
+                                                           get_exp_density=True)
+        experiments_treatments.append(exp_treatment)
+
+        exp_df = pd.read_csv(exp_full_path)
+        cells_xy, cells_times_of_death = exp_df.loc[:, ['cell_x', 'cell_y']].values, \
+                                         exp_df.loc[:, ['death_time']].values
+
+        print(
+            f'{"#" * 20}\nAnalyzing experiment: {exp_name}, Treatment: {exp_treatment}, measurements: {",".join(measurements_types)}|'
+            f'{exp_idx + 1}/{experiments_total_number}\n{"#" * 20}')
+
+        cells_neighbors_lvl1, cells_neighbors_lvl2, cells_neighbors_lvl3 = get_cells_neighbors(
+            XY=cells_xy,
+            threshold_dist=neighbors_threshold_dist
+        )
+        measurements_results = []
+        for measurement in measurements_types:
+            is_density_measurement = 'density' in measurement
+            type_of_measurement = 'density' if is_density_measurement else measurement
+
+            type_of_density = measurement if is_density_measurement else None
+
+            if type_of_measurement == 'adjacent_death_time_variance':
+                raise NotImplemented('adjacent_death_time_variance is not supported!')
+
+            elif type_of_measurement == 'adjacent_death_time_difference':
+                measurement_temporal_readout, measurement_endpoint_readout = calc_time_difference_of_adjacent_death_in_single_experiment(
+                    cells_neighbors=cells_neighbors_lvl1,
+                    cells_times_of_death=cells_times_of_death,
+                    exp_name=exp_name,
+                    exp_treatment=exp_treatment,
+                    return_adjacent_death_diff_times_mean_for_each_cell=True,
+                    **single_exp_kwargs
+                )
+
+            elif type_of_measurement == 'spi':
+                raise ValueError('SPI does not support temporal readouts!')
+
+            elif type_of_measurement == 'density':
+                measurement_endpoint_readout, measurement_temporal_readout = calculate_local_cell_density_single_experiment(
+                    cells_loci=cells_xy,
+                    cells_neighbors=cells_neighbors_lvl1,
+                    type_of_density=type_of_density,
+                    **kwargs
+                )
+            else:
+                raise ValueError(f'Unknown measurement: {measurement}')
+
+            measurements_results.append(measurement_temporal_readout)
+
+        if len(measurements_types) >= 2:
+            exp_readouts_dict = {
+                'exp_name': exp_name.split('.cs')[0],
+                'x_readout': measurements_results[0],
+                'y_readout': measurements_results[1],
+                'plot_kwargs': {},
+                'color_map': cells_times_of_death.flatten() / cells_times_of_death.max(),
+                # color_map by normalized values of cells' time of death.
+            }
+            exp_readouts_dictionaries.append(exp_readouts_dict)
+
+    if visualize_flag:
+        full_dir_path_to_save_fig = os.sep.join(
+            [RESULTS_MAIN_DIR, 'MeasurementsEndpointReadoutsPlots',
+             'ComparisonBetweenMeasurements']) if full_dir_path_to_save_fig is None else full_dir_path_to_save_fig
+
+        fig_title = f'{measurements_types[0]} about {measurements_types[1]}'
+
+        plot_multiple_experiments_temporal_readouts(experiments_readouts=exp_readouts_dictionaries,
+                                                    fig_x_label=measurements_types[0],
+                                                    fig_y_label=measurements_types[1],
+                                                    fig_title=fig_title,
+                                                    dir_to_save_fig_full_path=full_dir_path_to_save_fig,
+                                                    measurement_type='&'.join(measurements_types),
+                                                    **kwargs)
+
+
+def calc_and_plot_2_measurements_endpoint_readouts_for_multiple_experiments(measurements_types: List[str],
+                                                                            main_exp_dir_full_path: str,
+                                                                            limit_exp_num: int = float('inf'),
+                                                                            **kwargs):
+    """
+    Calculates the endpoint readouts of multiple measurements for all experiments in the 'main_exp_dir_full_path' directory.
+    :param measurements_types: list of measurements types as strings
+    :param main_exp_dir_full_path: string, the absolute path to the directory containing experiments files.
+    :param limit_exp_num: int, the maximal number of experiments to analyze, default is all experiments.
+    :param kwargs:
+    :return:
+    """
+    measurement_results = [None for i in measurements_types]
+    treatments = None
+    treatments_not_cleaned = None
+
+    visualize_flag = kwargs.get('visualize_flag', False)
+
+    full_dir_path_to_save_fig = kwargs.get('full_dir_path_to_save_fig', None)
+
+    cluster_evaluation_flag = kwargs.get('cluster_evaluation_flag', False)
+    if cluster_evaluation_flag:
+        cluster_evaluation_method = kwargs.get('cluster_evaluation_method', 'silhouette_coefficient')
+
+    use_autonomousity_labels = kwargs.get('use_autonomousity_labels_flag', USE_AUTONOMOUSITY_LABELS)
+    if use_autonomousity_labels:
+        treatments_to_autonomousity_json_path = kwargs.get('treatments_to_autonomousity_json_path',
+                                                           TREATMENTS_TO_AUTONOMOUSITY_JSON_PATH)
+
+    for measurement_idx, measurement_type in enumerate(measurements_types):
+        is_density_measurement = 'density' in measurement_type
+        type_of_measurement = 'density' if is_density_measurement else measurement_type
+
+        type_of_density = measurement_type if is_density_measurement else None
+
+        new_kwargs = copy.deepcopy(kwargs)
+
+        new_kwargs['type_of_density'] = type_of_density
+        new_kwargs['type_of_measurement'] = type_of_measurement
+        new_kwargs['visualize_flag'] = False
+        all_endpoint_readouts_by_experiment, all_exps_treatments, all_exps_global_densities = calc_multiple_exps_measurements(
+            main_exp_dir_full_path,
+            limit_exp_num,
+            **new_kwargs
+        )
+        measurement_results[measurement_idx] = np.array(all_endpoint_readouts_by_experiment)
+
+        # to perform calculation only once
+        if treatments is None:
+            treatments = all_exps_treatments
+            if use_autonomousity_labels:
+                treatments_to_autonomousity_dict = load_dict_from_json(path=treatments_to_autonomousity_json_path)
+                treatments = np.array(list(map(
+                    lambda treatment_name: treatments_to_autonomousity_dict[treatment_name], treatments)))
+            treatments_not_cleaned = treatments.copy()
+            treatments = np.array([clean_string_from_bad_chars(x) for x in treatments])
+
+    correlation_per_treatment = None
+
+    if kwargs.get('calc_correlation', False):
+        correlation_per_treatment = {
+            key: calc_correlation(measurement_results[0][treatments == key], measurement_results[1][treatments == key],
+                                  return_p_val=True) for key in np.unique(treatments)}
+        # correlation_per_treatment['non_autonomous'], correlation_per_treatment['autonomous'] = calc_correlation(measurement_results[0][treatments=='non_autonomous'], measurement_results[1][treatments=='non_autonomous']), calc_correlation(measurement_results[0][treatments=='autonomous'], measurement_results[1][treatments=='autonomous'])
+        print(correlation_per_treatment)
+
+    if cluster_evaluation_flag and len(measurement_results) == 2:
+        clustering_score = clusters_evaluation(
+            x_values=measurement_results[0],
+            y_values=measurement_results[1],
+            clustering_labels=treatments,
+            cluster_evaluation_method=cluster_evaluation_method
+        )
+
+    if visualize_flag and len(measurement_results) == 2:
+        full_dir_path_to_save_fig = os.sep.join(
+            [RESULTS_MAIN_DIR, 'MeasurementsEndpointReadoutsPlots',
+             'ComparisonBetweenMeasurements']) if full_dir_path_to_save_fig is None else full_dir_path_to_save_fig
+        if cluster_evaluation_flag:
+            clustering_postfix = f'\nclustering score:{clustering_score}'
+        else:
+            clustering_postfix = ''
+        if correlation_per_treatment is not None:
+            keys_correlations = "\n".join(
+                [f'{key}:' + str(correlation_per_treatment[key]) for key in np.unique(treatments)])
+            correlation_postfix = ''  # f'\n{keys_correlations}'
+            print(keys_correlations)
+        else:
+            correlation_postfix = ''
+        visualize_endpoint_readouts_by_treatment_about_readouts(y_readout=np.array(measurement_results[0]),
+                                                                x_readout=np.array(measurement_results[1]),
+                                                                treatment_per_readout=treatments_not_cleaned,
+                                                                full_dir_path_to_save_fig=full_dir_path_to_save_fig,
+                                                                y_label=measurements_types[0],
+                                                                x_label=measurements_types[1],
+                                                                fig_title=f'{measurements_types[0]} about {measurements_types[1]}{clustering_postfix}{correlation_postfix}',
+                                                                use_log=False,
+                                                                set_y_lim=False,
+                                                                set_x_lim=False,
+                                                                show_legend=True,
+                                                                fig_name_to_save=f'{measurements_types[0]}_about_{measurements_types[1]}',
+                                                                **new_kwargs)
+
+
+def calc_accumulated_fraction_of_death_and_rate(experiments_f_names: List[str],
+                                                main_exp_dir_full_path: str,
+                                                **kwargs):
+    meta_data_file_path = kwargs.get('meta_data_file_path',
+                                     'C:\\Users\\User\\PycharmProjects\\CellDeathQuantification\\Data\\Experiments_XYT_CSV\\ExperimentsMetaData.csv')
+
+    for exp_name in experiments_f_names:
+        exp_full_path = os.path.join(main_exp_dir_full_path, exp_name)
+
+        exp_treatment, exp_time_res, exp_density = \
+            get_exp_treatment_type_and_temporal_resolution(exp_file_name=exp_name,
+                                                           meta_data_file_full_path=meta_data_file_path,
+                                                           get_exp_density=True)
+
+        exp_cells_loci, exp_cells_times_of_death = read_experiment_cell_xy_and_death_times(exp_full_path)
+
+        all_death_times_unique = np.arange(-exp_time_res, np.unique(exp_cells_times_of_death).max(),
+                                           exp_time_res) + exp_time_res
+
+        p_nuc_by_time, p_prop_by_time, p_nuc_global, p_prop_global, \
+        all_frames_nucleators_mask, all_frames_propagators_mask, accumulated_death_fraction_by_time = \
+            calc_single_experiment_temporal_p_nuc_and_p_prop_and_endpoint_readouts_provided_temporal_resolution(
+                single_exp_full_path=exp_full_path, temporal_resolution=exp_time_res, **kwargs)
+
+        accumulated_death_rate_by_time = np.array(
+            (accumulated_death_fraction_by_time[1:] - accumulated_death_fraction_by_time[:-1]).tolist())
+
+        # Calculating the fit to the LED model:
+        led_fitted_model, D_r = fit_signal_to_led_model(accumulated_death_fraction_by_time, all_death_times_unique)
+
+        plt.clf()
+        fig, ax = plt.subplots()
+        x_axis = all_death_times_unique
+        ax.plot(x_axis, accumulated_death_fraction_by_time, '--', color='black', label='Accumulated fraction of death')
+        ax.plot(x_axis[:-1], accumulated_death_rate_by_time, '-', color='black', label='Accumulated rate of death')
+        ax.plot(x_axis, led_fitted_model, '-', color='blue', label='Death fraction LED fit')
+
+        ax.set_xlabel('Time (Minutes)')
+        ax.set_ylabel('Cell Death')
+
+        ax.set_title(f'Experiment:{exp_name}\nTreatment:{exp_treatment}\n#Cells={exp_density}, D_R={D_r:.3f}')
+
+        plt.legend()
+        plt.tight_layout()
+        plt.show()
+
+
+def calc_proba_for_death_decision_at_x_dead_neighbors_and_delta_tod(neighbors_list: List[List[int]],
+                                                                    cells_tods: np.array,
+                                                                    all_timepoints_minutes: Union[np.array, List[int], set],
+                                                                    n_dead_neighbors: int,
+                                                                    delta_time_to_die_by: int):
+    """
+    calculates the probability for cells to die under two constraints -
+        1. #dead neighbors as a given integer (n_dead_neighbors argument).
+        2. delta time to die
+    :param neighbors_list:
+    :param cells_tods:
+    :param all_timepoints_minutes:
+    :param n_dead_neighbors:
+    :param delta_time_to_die_by:
+    :return:
+    """
+    alive_with_x_dead_at_time_x1_ctr = set()
+    dead_with_x_dead_at_time_x1_ctr = set()
+    examined_cells = set()
+    for time_x in all_timepoints_minutes:
+        # all cells that are alive at given time (time_x) + the delta to die in (delta_time_to_die_by) - t+\delta.
+        alive_cells_at_time_x1 = np.where(cells_tods > time_x + delta_time_to_die_by)[0]
+        # all cells that are dead up to given time (time_x)
+        dead_cells_at_time_x = np.where(cells_tods <= time_x)[0]
+        for cell_idx, cell_neighbors in enumerate(neighbors_list):
+            # check whether cell already dead
+            if cell_idx in dead_cells_at_time_x or cell_idx in examined_cells:
+                continue
+            xy = np.intersect1d(dead_cells_at_time_x,
+                                np.array(cell_neighbors))
+            # if the cell is alive and its neighbors list is the same size as the constraint of number of dead neighbors.
+            if len(xy) == n_dead_neighbors and cell_idx in alive_cells_at_time_x1:
+                alive_with_x_dead_at_time_x1_ctr.add(cell_idx)
+                examined_cells.add(cell_idx)
+            # if the cell is dead and its neighbors list is the same size as the constraint of number of dead neighbors.
+            if len(xy) == n_dead_neighbors and cell_idx not in alive_cells_at_time_x1:
+                dead_with_x_dead_at_time_x1_ctr.add(cell_idx)
+                examined_cells.add(cell_idx)
+        # todo: attempt to use numpy fast fancy indexing to reduce runtime:
+        # getting all neighbors lists of cells that are not dead.
+        # neighbors_list_np = np.array(neighbors_list, dtype=object)
+        # neighbors_mask = np.ones_like(neighbors_list_np, dtype=bool)
+        # neighbors_mask[dead_cells_at_time_x] = False
+        # neighbors_of_alive_cells = neighbors_list_np[neighbors_mask]
+        # not working yet:
+        # n_dead_neighbors_in_neighbors_list = np.vectorize(lambda x: np.intersect1d(dead_cells_at_time_x, np.array(x)))(neighbors_of_alive_cells)
+
+
+
+
+
+    return len(dead_with_x_dead_at_time_x1_ctr)/(len(alive_with_x_dead_at_time_x1_ctr) + len(dead_with_x_dead_at_time_x1_ctr))
+
+
+def calc_propagation_by_number_of_dead_neighbors_and_time_from_recent_neighbors_death(
+        cells_tods: np.array,
+        cells_locis: np.array,
+        exp_temporal_resolution: int,
+        max_number_of_dead_neighbors_to_calc: int,
+        max_delta_tod_from_recently_dead_neighbor_frame_num: int,
+        **kwargs
+) -> np.array:
+    """
+    calculates the mean probability of a cell to die given #dead_neighbors and delta time of death
+    between cells and their neighbors most recent time of death.
+    if a cells #dead neighbors exceeds the maximum provided, or the delta time of death exceeds maximum allowed, we consider it as
+    the maximum value.
+    NOTE - max_delta_tod_from_recently_dead_neighbor_frame_num is given as number of frames, but is translated to the
+    time delta in minutes during the calculation of this function.
+    :param cells_tods:
+    :param cells_locis:
+    :param cells_temporal_resolution:
+    :param kwargs:
+    :return:
+    """
+    ignore_out_of_bounds_cells = kwargs.get('ignore_out_of_bounds_cells', False)
+    all_time_frames_minutes = np.arange(cells_tods.min(), cells_tods.max()+1, exp_temporal_resolution)
+
+    cells_neighbors_lvl1, cells_neighbors_lvl2, cells_neighbors_lvl3 = get_cells_neighbors(XY=cells_locis)
+
+    time_differences_to_calc = np.arange(exp_temporal_resolution, (max_delta_tod_from_recently_dead_neighbor_frame_num * exp_temporal_resolution)+1,exp_temporal_resolution)
+    num_of_dead_neighbors_to_calc = np.arange(1, max_number_of_dead_neighbors_to_calc + 1, 1)
+
+    proba_map = np.zeros((len(time_differences_to_calc), len(num_of_dead_neighbors_to_calc)))
+    for t_idx, time_difference in enumerate(time_differences_to_calc):
+        for n_idx, num_of_dead_neighbors in enumerate(num_of_dead_neighbors_to_calc):
+            proba_map[t_idx, n_idx] = \
+                calc_proba_for_death_decision_at_x_dead_neighbors_and_delta_tod(
+                    neighbors_list=cells_neighbors_lvl1,
+                    cells_tods=cells_tods,
+                    all_timepoints_minutes=all_time_frames_minutes,
+                    n_dead_neighbors=num_of_dead_neighbors,
+                    delta_time_to_die_by=time_difference)
+
+
+    return proba_map
+
+
+def calc_factor_of_propagation_by_number_of_dead_neighbors_and_time_from_recent_neighbors_death(
+        exp_name: Union[str, List[str]],
+        exps_dir_path: str,
+        max_number_of_dead_neighbors_to_calc: int,
+        max_delta_tod_from_recently_dead_neighbor: int,
+        meta_data_full_file_path: str,
+        **kwargs) -> np.array:
+    """
+    calculates the factor change between mean probability of a cell to die given #dead_neighbors and delta time of death
+    between cells and their neighbors most recent time of death.
+
+    :param exp_path:
+    :param max_number_of_dead_neighbors_to_calc:
+    :param max_delta_tod_from_recently_dead_neighbor:
+    :return:
+    """
+    # kwargs:
+    if isinstance(exp_name, list):
+        results = {}
+        for exp in exp_name:
+            res = calc_factor_of_propagation_by_number_of_dead_neighbors_and_time_from_recent_neighbors_death(
+                exp_name=exp,
+                exps_dir_path=exps_dir_path,
+                max_number_of_dead_neighbors_to_calc=max_number_of_dead_neighbors_to_calc,
+                max_delta_tod_from_recently_dead_neighbor=max_delta_tod_from_recently_dead_neighbor,
+                meta_data_full_file_path=meta_data_full_file_path, **kwargs
+            )
+            results[exp] = res
+        return results
+    cbarlabel = kwargs.get('cbarlabel', 'factor of non randomly')
+    number_of_random_permutations = kwargs.get('number_of_random_permutations', 1000)
+    fig_title = kwargs.get('fig_title', f'Factor of change\nbetween experiment and random permutations\n{exp_name}\n#Permutations:{number_of_random_permutations}')
+    cbar_kwargs = kwargs.get('cbar_kwargs', {})
+
+    exp_full_path = os.path.join(exps_dir_path, exp_name)
+    exp_treatment, exp_temporal_resolution = get_exp_treatment_type_and_temporal_resolution(exp_file_name=exp_name,
+                                                                                            meta_data_file_full_path=meta_data_full_file_path)
+
+    cells_locis, cells_tods = read_experiment_cell_xy_and_death_times(exp_full_path=exp_full_path)
+
+
+    org_cells_death_probabilities_by_n_neighbors_and_delta_tods =\
+        calc_propagation_by_number_of_dead_neighbors_and_time_from_recent_neighbors_death(cells_tods=cells_tods,
+                                                                                          cells_locis=cells_locis,
+                                                                                          exp_temporal_resolution=exp_temporal_resolution,
+                                                                                          max_number_of_dead_neighbors_to_calc=max_number_of_dead_neighbors_to_calc,
+                                                                                          max_delta_tod_from_recently_dead_neighbor_frame_num=max_delta_tod_from_recently_dead_neighbor)
+    # generate 'number_of_random_permutations' random permutations of cells times of death
+    #   and calculate each permutation probability map, then calculate the difference factor
+    #   between each on and the original.
+    factor_of_change_map_for_all_permutations = np.zeros(shape=(number_of_random_permutations,
+                                           max_delta_tod_from_recently_dead_neighbor,
+                                           max_number_of_dead_neighbors_to_calc))
+    for permutation_number in range(number_of_random_permutations):
+        print(f"Randomizing cells' TODs - permutation #{permutation_number}")
+        permuted_cells_tods = cells_tods.copy()
+        np.random.shuffle(permuted_cells_tods)
+        assert not (permuted_cells_tods==cells_tods).all(), f'Shuffle failed!'
+
+        randomaly_permuted_cells_death_probabilities_by_n_neighbors_and_delta_tods =\
+            calc_propagation_by_number_of_dead_neighbors_and_time_from_recent_neighbors_death(
+                cells_tods=permuted_cells_tods,
+                cells_locis=cells_locis,
+                exp_temporal_resolution=exp_temporal_resolution,
+                max_number_of_dead_neighbors_to_calc=max_number_of_dead_neighbors_to_calc,
+                max_delta_tod_from_recently_dead_neighbor_frame_num=max_delta_tod_from_recently_dead_neighbor)
+
+        factor_of_change_map_for_all_permutations[permutation_number, :, :] = np.divide(
+            org_cells_death_probabilities_by_n_neighbors_and_delta_tods,
+        randomaly_permuted_cells_death_probabilities_by_n_neighbors_and_delta_tods,
+            # out=,
+            where=randomaly_permuted_cells_death_probabilities_by_n_neighbors_and_delta_tods!=0)
+            # org_cells_death_probabilities_by_n_neighbors_and_delta_tods /   \
+            # randomaly_permuted_cells_death_probabilities_by_n_neighbors_and_delta_tods
+    # calculate average factor of change between
+    factor_of_change_map = np.mean(factor_of_change_map_for_all_permutations, axis=0)
+
+
+
+    plt.clf()
+    fig, ax = plt.subplots()
+
+    im = ax.imshow(factor_of_change_map, cmap="YlGn", vmin=0.8, vmax=3)
+    cbar = ax.figure.colorbar(im, ax=ax, **cbar_kwargs)
+    cbar.ax.set_ylabel(cbarlabel, rotation=-90, va="bottom")
+    num_neighbors_to_calc = np.arange(0, max_number_of_dead_neighbors_to_calc, 1)
+    delta_in_tod_to_calc = np.arange(0, max_delta_tod_from_recently_dead_neighbor, 1)
+    ax.set_xticks(num_neighbors_to_calc)
+    ax.set_yticks(delta_in_tod_to_calc)
+    ax.set_xticklabels([f"{n+1}" for n in num_neighbors_to_calc])
+    ax.set_xlabel('number of dead neighbors at death time-1')
+    ax.set_yticklabels([f"{(t+1)*exp_temporal_resolution}" for t in delta_in_tod_to_calc])
+    ax.set_ylabel('death time difference')
+    ax.set_title(fig_title)
+    for i in num_neighbors_to_calc:
+        for j in delta_in_tod_to_calc:
+            text = ax.text(j, i, np.float16(factor_of_change_map[i, j]),
+                           ha="center", va="center", color="black")
+    if kwargs.get('show_fig', SHOWFIG):
+        plt.show()
+    plt.close()
+
+    # cells_death_probabilities_by_n_neighbors_and_delta_tods_factor_change = randomaly_permuted_cells_death_probabilities_by_n_neighbors_and_delta_tods / org_cells_death_probabilities_by_n_neighbors_and_delta_tods
+    return factor_of_change_map
+
+
+
 
 # if __name__ == '__main__':
-#     single_exp_path = 'C:\\Users\\User\\PycharmProjects\\CellDeathQuantification\\Data\\Experiments_XYT_CSV\\OriginalTimeMinutesData\\20160820_10A_FB_xy13.csv'
-#     single_exp_df = pd.read_csv(single_exp_path)
-#     cells_loci = single_exp_df.loc[:, ['cell_x', 'cell_y']].values
-#     cells_neighbors1, cells_neighbors2, cells_neighbors3 = get_cells_neighbors(cells_loci)
-#     calculate_local_cell_density_single_experiment(cells_loci, cells_neighbors1, type_of_density='distance_density')
+# recent dead only flag
+# calc_rmse_between_experiments_results_of_altering_flag_values(dir_path=os.sep.join(
+#     os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV',
+#                                       'OriginalTimeMinutesData']))  #, limit_exp_num=10)
+# compression flag
+# calc_rmse_between_experiments_results_of_altering_flag_values(flag_key='dir_path',
+#                                                               flag_values=(os.sep.join(
+#                                                                   os.getcwd().split(os.sep)[:-1] + ['Data',
+#                                                                                                     'Experiments_XYT_CSV',
+#                                                                                                     'OriginalTimeMinutesData']),
+#                                                                            os.sep.join(
+#                                                                                os.getcwd().split(os.sep)[:-1] + [
+#                                                                                    'Data', 'Experiments_XYT_CSV',
+#                                                                                    'CompressedTime_XYT_CSV'])))
+# compression flag
+# calc_and_visualize_all_experiments_csvs_in_dir_with_altering_flag_values(flag_key='dir_path',
+#                                                                          flag_values=(os.sep.join(
+#     os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV',
+#                                       'OriginalTimeMinutesData']), os.sep.join(
+#     os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV',
+#                                       'CompressedTime_XYT_CSV'])))
+#
+# MULTIPLE EXPERIMENTS
+# calc_and_visualize_all_experiments_csvs_in_dir(limit_exp_num=float('inf'),
+#                                                dir_path=os.sep.join(
+#                                                    os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV',
+#                                                                                      'OriginalTimeMinutesData']))
+
+# # single experiment testing
+# path = '..\\Data\\Experiments_XYT_CSV\\CompressedTime_XYT_CSV\\20160909_b16f10_aMSH_xy37.csv'
+# p_nuc_by_time, p_prop_by_time, p_nuc_global, p_prop_global, \
+# all_frames_nucleators_mask, all_frames_propagators_mask,\
+#     accumulated_fraction_of_death_by_time = calc_single_experiment_temporal_p_nuc_and_p_prop_and_endpoint_readouts(single_exp_full_path=path)
+#
+# visualize_cell_death_in_time(xyt_full_path=path, nucleators_mask=all_frames_nucleators_mask, exp_treatment='just_treatment', exp_name='just name')
+#
+# plot_measurements_by_time(p_nuc_by_time, p_prop_by_time, accumulated_fraction_of_death_by_time,
+#                           temporal_resolution=15, exp_name='20180620_HAP1_erastin_xy1', exp_treatment='test_treat')
+
+# plot kl-divergence between recent death only flags endpoint readouts
+# kwargs = dict()
+# kwargs['distance_metric'] = 'kl_divergence'
+# kwargs['visualize_flag'] = True
+# kwargs['visualize_specific_treatments'] = ['tnf', 'erastin', 'trail']
+# dir_path = os.sep.join(
+#     os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV',
+#                                  'OriginalTimeMinutesData'])
+# by_treatment_distance_metric_score_p_nuc, by_treatment_distance_metric_score_p_prop = \
+#     calc_distance_metric_between_experiments_results_of_altering_flag_values(
+#     dir_path=dir_path, **kwargs)
+
+# single simulation xyt results testing
+# path = '..\\Data\\Simulations_XYT_CSV\\apoptosis_attempts\\xyt_ferroptosis_attempt.csv'
+# temporal_resolution = 15
+# p_nuc_by_time, p_prop_by_time, p_nuc_global, p_prop_global, \
+# all_frames_nucleators_mask, all_frames_propagators_mask,\
+#     accumulated_fraction_of_death_by_time = \
+#     calc_single_experiment_temporal_p_nuc_and_p_prop_and_endpoint_readouts_provided_temporal_resolution(
+#         single_exp_full_path=path, temporal_resolution=temporal_resolution)
+#
+# visualize_cell_death_in_time(xyt_full_path=path, nucleators_mask=all_frames_nucleators_mask, exp_treatment='just_treatment', exp_name='just name')
+#
+# plot_measurements_by_time(p_nuc_by_time, p_prop_by_time, accumulated_fraction_of_death_by_time,
+#                           temporal_resolution=temporal_resolution, exp_name='simulation_test',
+#                           exp_treatment='simulation')
+
+## single experiment probabilities per unit of time testing
+# exp_path = 'C:\\Users\\User\\PycharmProjects\\CellDeathQuantification\\Data\\Experiments_XYT_CSV\\OriginalTimeMinutesData\\20160820_10A_FB_xy13.csv'
+#
+# calc_slopes_and_probabilities_per_unit_of_time_single_experiment(exp_full_path=exp_path,
+#                                                                      exp_temporal_resolution=10,
+#                                                                      exp_treatment='C dots',
+#                                                                      unit_of_time_min=60,
+#                                                                      consider_majority_of_death_only=True)
+
+# multiple experiments slopes and probabilities per unit of time testing
+# dir_path = os.sep.join(os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV', 'OriginalTimeMinutesData'])
+# calc_slopes_and_probabilities_per_unit_of_time_entire_dir(dir_full_path=dir_path,
+#                                                           treatments_to_include='all',
+#                                                           unit_of_time_min=60,
+#                                                           consider_majority_of_death_only=True)
+
+# p_prop measurement as a fraction of adjacent dying cells in window:
+# dir_path = os.sep.join(os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV', 'OriginalTimeMinutesData'])
+# calc_multiple_exps_measurements(main_exp_dir_full_path=dir_path,
+#                                 limit_exp_num=float('inf'),
+#                                 use_sliding_time_window=True,
+#                                 type_of_measurement='fraction_of_adjacent_death',
+#                                 sliding_time_window_size_in_min=30,
+#                                 visualize_flag=True,
+#                                 treatments_to_include=['superkiller', 'fac', 'erastin', 'simulation'],#'all'
+#                                 consider_death_within_window_only_flag=True)
+# time of death differences between adjacent cells
+# dir_path = os.sep.join(os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV', 'OriginalTimeMinutesData'])
+# calc_multiple_exps_measurements(main_exp_dir_full_path=dir_path,
+#                                 limit_exp_num=float('inf'),
+#                                 use_sliding_time_window=False,
+#                                 type_of_measurement='adjacent_death_time_difference',
+#                                 bins_of_adjacent_death_diff=np.arange(0, 4, 0.5),
+#                                 treatments_to_include=['superkiller', 'fac', 'erastin', 'simulation'],
+#                                 visualize_flag=True,
+#                                 visualize_each_exp_flag=False
+#                                 )
+
+# time of death variance between adjacent cells in sliding time windows
+# dir_path = os.sep.join(os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV', 'OriginalTimeMinutesData'])
+# calc_multiple_exps_measurements(main_exp_dir_full_path=dir_path,
+#                                 limit_exp_num=float('inf'),
+#                                 use_sliding_time_window=True,
+#                                 sliding_time_window_size_in_min=100,
+#                                 type_of_measurement='adjacent_death_time_variance',
+#                                 # bins_of_adjacent_death_diff=np.arange(-10, 10, 1),
+#                                 treatments_to_include=['superkiller', 'fac', 'erastin', 'simulation'],
+#                                 visualize_flag=True,
+#                                 visualize_each_exp_flag=False
+#                                 )
+
+# time of death variance between adjacent cells in an entire experiment
+# dir_path = os.sep.join(os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV', 'OriginalTimeMinutesData'])
+# calc_multiple_exps_measurements(main_exp_dir_full_path=dir_path,
+#                                 limit_exp_num=float('inf'),
+#                                 use_sliding_time_window=False,
+#                                 type_of_measurement='adjacent_death_time_variance',
+#                                 treatments_to_include=['superkiller', 'fac', 'erastin', 'simulation'],
+#                                 visualize_flag=True,
+#                                 visualize_each_exp_flag=False)
+# if __name__ == '__main__':
+
+    # for treatments_to_include in [['fac&bso', 'erastin', 'dots']]: #[['fac&bso', 'erastin', 'dots']]:  # [['superkiller', 'ml162', 'h2O2']]: # [['fac&bso', 'erastin', 'dots']]: # [['superkiller', 'ml162', 'h2O2']]: # [['fac&bso', 'erastin'. 'dots']]: #[['superkiller', 'dots', 'h2O2', 'erastin']]: #[['superkiller', 'TNFa', 'h2O2']]: #[ ['fac&bso']]: #[['superkiller', 'dots', 'h2O2', 'erastin']]: #['all']:#, ['superkiller', 'TNFa', 'h2O2'], ['fac&bso'],['superkiller', 'dots', 'h2O2', 'erastin']]:  # , ['fac&bso', 'h2O2']
+#
+#     # p_nuc about adjacent death time difference measurement
+#     # dir_path = os.sep.join(
+#     #     os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV', 'OriginalTimeMinutesData'])
+#     # calc_pnuc_vs_measurement_for_all_experiments(main_exp_dir_full_path=dir_path,
+#     #                                              limit_exp_num=float('inf'),
+#     #                                              use_sliding_time_window=False,
+#     #                                              type_of_measurement='adjacent_death_time_difference',
+#     #                                              bins_of_adjacent_death_diff=np.arange(0, 4, 0.5),
+#     #                                              treatments_to_include=treatments_to_include,
+#     #                                              cluster_evaluation_method='silhouette_coefficient',
+#     #                                              # silhouette_coefficient, # 'calinski_harabasz_index', # 'davies_bouldin_index'
+#     #                                              evaluate_clustering_per_treatment=True,
+#     #                                              use_autonomousity_labels_flag=True,
+#     #                                              visualize_flag=True,
+#     #                                              visualize_each_exp_flag=False
+#     #                                              )
+#     #
+#         p_nuc about SPI measurement
+#         dir_path = os.sep.join(
+#             os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV', 'OriginalTimeMinutesData'])
+#         calc_pnuc_vs_measurement_for_all_experiments(main_exp_dir_full_path=dir_path,
+#                                                      limit_exp_num=float('inf'),
+#                                                      use_sliding_time_window=False,
+#                                                      type_of_measurement='spi',
+#                                                      # bins_of_adjacent_death_diff=np.arange(0, 4, 0.5),
+#                                                      treatments_to_include=treatments_to_include,
+#                                                      cluster_evaluation_method='silhouette_coefficient',
+#                                                      # silhouette_coefficient, # 'calinski_harabasz_index', # 'davies_bouldin_index'
+#                                                      evaluate_clustering_per_treatment=True,
+#                                                      use_autonomousity_labels_flag=False,
+#                                                      visualize_flag=True,
+#                                                      visualize_each_exp_flag=False,
+#                                                      auto_axis_lim=True,
+#                                                      temporal_resolutions_to_include=[30],
+#                                                      )
+#
+        # p_nuc about mean local cell density measurement
+#         dir_path = os.sep.join(
+#             os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV', 'OriginalTimeMinutesData'])
+#         calc_pnuc_vs_measurement_for_all_experiments(main_exp_dir_full_path=dir_path,
+#                                                      limit_exp_num=float('inf'),
+#                                                      use_sliding_time_window=False,
+#                                                      type_of_measurement='density',
+#                                                      type_of_density='density_non_normalized_number_of_neighbors',
+#                                                      # 'distance_density'/'vanilla_density'/'inverse_distance_density'/ 'normalized_min_max_distance_density'/ 'density_non_normalized_number_of_neighbors'/ 'density_distance_to_closest_neighbor'/'density_fraction_of_dead_of_neighbors'
+#                                                      treatments_to_include=treatments_to_include,
+#                                                      cluster_evaluation_method='silhouette_coefficient',
+#                                                      # silhouette_coefficient, # 'calinski_harabasz_index', # 'davies_bouldin_index'
+#                                                      evaluate_clustering_per_treatment=True,
+#                                                      use_autonomousity_labels_flag=False,
+#                                                      visualize_flag=True,
+#                                                      visualize_each_exp_flag=False,
+#                                                      normalize_loci_flag=False,
+#                                                      temporal_resolutions_to_include=[30],
+#                                                      auto_axis_lim = True,
+#                                                      )
+# # #
+# # p(nuc) about fraction of dead of neighbors:
+#
+# dir_path = os.sep.join(
+#     os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV', 'OriginalTimeMinutesData'])
+# calc_pnuc_vs_measurement_for_all_experiments(main_exp_dir_full_path=dir_path,
+#                                          limit_exp_num=float('inf'),
+#                                          use_sliding_time_window=False,
+#                                          type_of_measurement='density',
+#                                          type_of_density='density_fraction_of_dead_of_neighbors',
+#                                          # 'distance_density'/'vanilla_density'/'inverse_distance_density'/ 'normalized_min_max_distance_density'/ 'density_non_normalized_number_of_neighbors'/ 'density_distance_to_closest_neighbor''
+#                                          treatments_to_include=treatments_to_include,
+#                                          cluster_evaluation_method='silhouette_coefficient',
+#                                          # silhouette_coefficient, # 'calinski_harabasz_index', # 'davies_bouldin_index'
+#                                          evaluate_clustering_per_treatment=True,
+#                                          use_autonomousity_labels_flag=True,
+#                                          visualize_flag=True,
+#                                          visualize_each_exp_flag=False,
+#                                          normalize_loci_flag=False,
+#                                          )
+
+#     # calc deltaNeighbors about distance to closest neighbor
+#     dir_path = os.sep.join(
+#         os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV', 'OriginalTimeMinutesData'])
+#     calc_and_plot_2_measurements_endpoint_readouts_for_multiple_experiments(
+#         measurements_types=['adjacent_death_time_difference',
+#                             'density_distance_to_closest_neighbor'],
+#         main_exp_dir_full_path=dir_path,
+#         limit_exp_num=float('inf'),
+#         use_sliding_time_window=False,
+#         treatments_to_include=treatments_to_include,
+#         cluster_evaluation_method='silhouette_coefficient',
+#         # silhouette_coefficient, # 'calinski_harabasz_index', # 'davies_bouldin_index'
+#         evaluate_clustering_per_treatment=True,
+#         use_autonomousity_labels_flag=False,
+#         visualize_flag=True,
+#         visualize_each_exp_flag=False,
+#         normalize_loci_flag=False,
+#         normalize_time_of_death=False,
+#         calc_correlation=True,
+#         )
+#     # calc deltaNeighbors about number of neighbors not normalized
+#     dir_path = os.sep.join(
+#         os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV', 'OriginalTimeMinutesData'])
+#     calc_and_plot_2_measurements_endpoint_readouts_for_multiple_experiments(
+#         measurements_types=['adjacent_death_time_difference',
+#                             'density_non_normalized_number_of_neighbors'],
+#         main_exp_dir_full_path=dir_path,
+#         limit_exp_num=float('inf'),
+#         use_sliding_time_window=False,
+#         treatments_to_include=treatments_to_include,
+#         cluster_evaluation_method='silhouette_coefficient',
+#         # silhouette_coefficient, # 'calinski_harabasz_index', # 'davies_bouldin_index'
+#         evaluate_clustering_per_treatment=True,
+#         use_autonomousity_labels_flag=False,
+#         visualize_flag=True,
+#         visualize_each_exp_flag=False,
+#         normalize_loci_flag=False,
+#         normalize_time_of_death=False,
+#         calc_correlation=True,
+#         )
+
+# if __name__ == '__main__':
+#     meta_data_file_path = 'C:\\Users\\User\\PycharmProjects\\CellDeathQuantification\\Data\\Experiments_XYT_CSV\\ExperimentsMetaData.csv'
+#     experiments_main_dir_path = 'C:\\Users\\User\\PycharmProjects\\CellDeathQuantification\\Data\\Experiments_XYT_CSV\\OriginalTimeMinutesData'
+#
+#     # exp_names = ('20180620_HAP1_erastin_xy6.csv', '20181227_MCF10A_SKT_xy1.csv')
+#     exp_names = ('20180620_HAP1_erastin_xy9.csv', '20181227_MCF10A_SKT_xy5.csv')
+#     compare_two_experiments_tod_about_distance(
+#         exp_names=exp_names,
+#         main_experiments_dir=experiments_main_dir_path,
+#         meta_data_file_path=meta_data_file_path,
+#         calculate_mean_of_measurement=True,
+#         fig_title=f'Ferroptosis, PEG comparisons'
+#     )
+
+
+# if __name__ == '__main__':
+#     # meta_data_file_path = ''
+#     experiments_main_dir_path = 'C:\\Users\\User\\PycharmProjects\\CellDeathQuantification\\Data\\Experiments_XYT_CSV\\OriginalTimeMinutesData'
+#     exp_names = ['20181229_HAP1-920H_FB+PEG1450_GCAMP_xy52.csv']#['20180514_HAP1_FB_xy4.csv', '20160820_10A_FB_xy14.csv', '20160828_10AsgCx43_FB_xy08.csv', '20180514_HAP1_FB_xy4.csv', '20181229_HAP1-920H_FB_GCAMP_xy48.csv']
+#     measurements_types = ['density_distance_to_closest_neighbor',
+#                                'adjacent_death_time_difference']
+#
+#     calc_and_plot_2_measurements_temporal_readouts_for_multiple_experiments(measurements_types=measurements_types,
+#                                                                             experiments_f_names=exp_names,
+#                                                                             main_exp_dir_full_path=experiments_main_dir_path,
+#                                                                             visualize_flag=True)
+
+# # accumulated death rate and fraction of death
+# if __name__ == '__main__':
+#     experiments_main_dir_path = 'C:\\Users\\User\\PycharmProjects\\CellDeathQuantification\\Data\\Experiments_XYT_CSV\\OriginalTimeMinutesData'
+#     exp_names = ['20181227_MCF10A_SKT_xy5.csv', '20180620_HAP1_erastin_xy6.csv']
+#     # exp_names = [f'20181227_MCF10A_SKT_xy{x}.csv' for x in range(1,6)]
+#     # exp_names = [f'20180620_HAP1_erastin_xy{x}.csv' for x in range(1, 11)]
+#     # exp_names = [f'20160909_b16f10_aMSH_xy{x}.csv' for x in range(36, 39)]
+#     calc_accumulated_fraction_of_death_and_rate(exp_names, experiments_main_dir_path)
+
+if __name__ == '__main__':
+    experiments_main_dir_path = 'C:\\Users\\User\\PycharmProjects\\CellDeathQuantification\\Data\\Experiments_XYT_CSV\\OriginalTimeMinutesData'
+    meta_data_file_path = 'C:\\Users\\User\\PycharmProjects\\CellDeathQuantification\\Data\\Experiments_XYT_CSV\\ExperimentsMetaData.csv'
+    exp_name = ['20180905_U937_TSZ_xy1.csv', '20180905_U937_TSZ_xy2.csv', '20180905_U937_TSZ_xy3.csv', '20180905_U937_TSZ_xy5.csv', '20180905_U937_TSZ_xy9.csv'] #'20180620_HAP1_erastin_xy5.csv' # ] # ['20181227_MCF10A_SKT_xy3.csv', '20181229_HAP1-920H_FB_GCAMP_xy48.csv', '20181229_HAP1-920H_FB+PEG3350_GCAMP_xy58.csv',
+    calc_factor_of_propagation_by_number_of_dead_neighbors_and_time_from_recent_neighbors_death(
+        exp_name=exp_name,
+        exps_dir_path=experiments_main_dir_path,
+        max_number_of_dead_neighbors_to_calc=5,
+        max_delta_tod_from_recently_dead_neighbor=5,
+        meta_data_full_file_path=meta_data_file_path
+    )

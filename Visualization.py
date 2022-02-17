@@ -183,7 +183,9 @@ def visualize_endpoint_readouts_by_treatment_about_readouts(x_readout: np.array,
                                                             use_log: bool = False,
                                                             plot_about_treatment: bool = False,
                                                             **kwargs):
+    auto_axis_lim = kwargs.get('auto_axis_lim', False)
     set_y_lim = kwargs.get('set_y_lim', True)
+    set_x_lim = kwargs.get('set_x_lim', True)
     show_legend = kwargs.get('show_legend', False)
     legend_font_size = kwargs.get('legend_font_size', 6)
     legend_marker_ration = kwargs.get('legend_marker_ration', 0.8)
@@ -219,10 +221,6 @@ def visualize_endpoint_readouts_by_treatment_about_readouts(x_readout: np.array,
         else:
             ax.plot(x, y, ms=marker_size, marker=marker,
                     color=color, label=treatment_per_readout[point_idx])
-            if y_readout.max() <= 1:
-                ax.set_ylim([0, 1])
-            else:
-                ax.set_ylim((min((0, y_readout.min())), max((1.1, y_readout.max()))))
 
     if plot_about_treatment:
         # temporal_unit = 'Minutes' if temporal_resolution != 1 else 'Frame#'
@@ -266,7 +264,7 @@ def visualize_endpoint_readouts_by_treatment_about_readouts(x_readout: np.array,
             else:
                 y_tick_limits_x_label = [-1, -0.5]
                 y_tick_limits_y_label = [-0.2, 0]
-        if set_y_lim:
+        if set_y_lim and not auto_axis_lim:
             axis[0].set_ylim(y_tick_limits_x_label)
             axis[1].set_ylim(y_tick_limits_y_label)
 
@@ -281,10 +279,28 @@ def visualize_endpoint_readouts_by_treatment_about_readouts(x_readout: np.array,
         else:
             x_tick_limits = [-1, 0]
             y_tick_limits = [-.4, 0]
-        if set_y_lim:
+        if set_y_lim and not auto_axis_lim:
             ax.set_xlim(x_tick_limits)
             ax.set_ylim(y_tick_limits)
-
+    if not plot_about_treatment:
+        if y_readout.max() <= .4 and not auto_axis_lim:
+            ax.set_ylim([0, 0.4])
+        elif y_readout.max() <= 1 and not auto_axis_lim:
+            ax.set_ylim([0, 1])
+        elif auto_axis_lim:
+            ax.set_ylim((max((0, y_readout.min() - 0.01)), min((1.1, y_readout.max() + 0.01))))
+            ax.set_xlim((max((0, x_readout.min() - 0.01)), max((1.1, x_readout.max() + 0.01))))
+        if set_x_lim and not auto_axis_lim:
+            if x_readout.max() <= .3:
+                ax.set_xlim([0, 0.3])
+            elif x_readout.max() <= .4:
+                ax.set_xlim([0, 0.4])
+            elif x_readout.max() <= 1:
+                ax.set_xlim([0, 1])
+            elif x_readout.max() >= 50:
+                ax.set_xlim((0, 150))
+            else:
+                ax.set_xlim((max((0, x_readout.min())), min((1.1, x_readout.max()))))
     if show_legend:
         # filter treatments colors and markers to show only computed treatments in legend
         filtered_treatment_to_color = {}
@@ -640,6 +656,83 @@ def scatter_with_linear_regression_line(x: np.array, y: np.array, x_label: str, 
     plt.close(fig=fig)
 
 
+def scatter_with_linear_regression_line_about_treatment(x_readout: np.array, y_readout: np.array, x_label: str,
+                                                        y_label: str, title: str,
+                                                        path_to_save_fig: str = '',
+                                                        plot_linear_regression: bool = False,
+                                                        exps_treatments: np.array = None, **kwargs):
+    """
+
+    :param colors:
+    :param color_map:
+    :param plot_linear_regression:
+    :param x:
+    :param y:
+    :param x_label:
+    :param y_label:
+    :param title:
+    :param path_to_save_fig:
+    :return:
+    """
+    plt.clf()
+
+    marker_size = kwargs.get('marker_size', 300)
+    legend_font_size = kwargs.get('legend_font_size', 6)
+    legend_marker_ration = kwargs.get('legend_marker_ration', 0.8)
+
+
+    marker_per_point, color_per_point, treatment_to_marker, treatment_to_color = \
+        get_marker_per_treatment_list(exps_treatments)
+
+    fig, ax = plt.subplots()
+    # plot probabilities for each level of neighborhoods
+    for point_idx, xyt in enumerate(zip(x_readout, y_readout, exps_treatments)):
+        x, y, exp_treatment = xyt
+        treatment_color, treatment_marker = treatment_to_color[exp_treatment], treatment_to_marker[exp_treatment]
+        ax.scatter(x, y, s=marker_size, color=treatment_color, marker=treatment_marker)
+
+    if plot_linear_regression:
+        # plot linear regression line
+        regression_line_x, regression_line_y = get_linear_regression_line_between_two_signals(x_readout, y_readout)
+        ax.plot(regression_line_x, regression_line_y)
+    else:
+        regression_line = np.linspace(0, 1, num=len(x_readout), endpoint=True)
+        ax.plot(regression_line, regression_line)
+
+    # plot labels
+    ax.set_xlabel(x_label)
+    ax.set_ylabel(y_label)
+    ax.set_title(title)
+
+    filtered_treatment_to_color = {}
+    filtered_treatment_to_marker = {}
+    for key, val in treatment_to_color.items():
+        if key in exps_treatments:
+            filtered_treatment_to_color[key] = val
+            filtered_treatment_to_marker[key] = treatment_to_marker[key]
+
+    custom_handles, custom_labels = get_custom_legend_artists(labels_to_colors=filtered_treatment_to_color,
+                                                              labels_to_markers=filtered_treatment_to_marker)
+
+    plt.legend(handles=custom_handles,
+               labels=custom_labels,
+               loc='best',
+               fontsize=legend_font_size,
+               markerscale=legend_marker_ration)
+
+    ax.set_ylim((0, 1))
+    ax.set_xlim((0, 1))
+
+    plt.tight_layout()
+
+    if SAVEFIG:
+        plt.savefig(f'{path_to_save_fig}.png', dpi=200)
+        plt.savefig(f'{path_to_save_fig}.eps', dpi=200)
+    elif SHOWFIG:
+        plt.show()
+    plt.close(fig=fig)
+
+
 def plot_endpoint_readout_for_compressed_temporal_resolution(temporal_resolution_axis: np.array,
                                                              endpoint_readouts_values_p_nuc: np.array,
                                                              endpoint_readouts_values_p_prop: np.array,
@@ -857,6 +950,109 @@ def visualize_measurement_per_treatment(readouts_per_experiment: np.array,
 
     plt.setp(ax.xaxis.get_majorticklabels(), ha="left", rotation_mode="anchor")
     plt.tight_layout()
+
+    present_fig(fig, ax,
+                measurement_type=measurement_type,
+                save_fig=save_fig,
+                show_fig=show_fig,
+                full_dir_path_to_save_fig=dir_to_save_fig_full_path,
+                fig_name_suffix=fig_name_suffix,
+                fig_name_prefix=fig_name_prefix)
+
+    plt.close(fig)
+
+
+def plot_multiple_experiments_temporal_readouts(experiments_readouts: List[Dict[str, Union[str, np.array]]],
+                                                fig_x_label: str,
+                                                fig_y_label: str,
+                                                fig_title: str,
+                                                dir_to_save_fig_full_path: str,
+                                                measurement_type: str,
+                                                **kwargs) -> None:
+    """
+    each element in experiments_readouts list is a dictionary with the following keys-values:
+        'exp_name' - OPTIONAL[str], the name that will appear in the legend of the plot, if not provided,
+            no legend will be rendered.
+        'x_readout' - np.array size N
+        'y_readout' - np.array size N
+        'color_map' - OPTIONAL[np.array] size N, the color for each datapoint, if not provided, identical colors will
+            be used for each experiment and no color bar will be rendered.
+        'marker' - OPTIONAL[str], the marker to use when plotting the experiment, if not provided, the experiment will
+            use the standart 'o' marker
+        'plot_kwargs' - OPTIONAL[Dict], any additional key word arguments to pass to the ax.scatter method.
+
+    :param fig_name_prefix:
+    :param fig_name_suffix:
+    :param measurement_type:
+    :param experiments_readouts:
+    :param fig_x_label:
+    :param fig_y_label:
+    :param fig_title:
+    :param dir_to_save_fig_full_path:
+    :param kwargs:
+    :return:
+    """
+
+    # set_y_lim = kwargs.get('set_y_lim', True)
+    save_fig = kwargs.get('save_fig', SAVEFIG)
+    show_fig = kwargs.get('show_fig', SHOWFIG)
+
+    fig_name_suffix = kwargs.get('fig_name_suffix', '')
+    fig_name_prefix = kwargs.get('fig_name_prefix', '')
+    color_bar_label = kwargs.get('color_bar_label', 'Normalized #neighbors')
+
+    use_clr_map = True
+    exp_min_value, exp_max_value = float('inf'), float('-inf')
+    cmap = mpl.cm.__builtin_cmaps[12]
+    use_legend = True
+
+    fig, ax = plt.subplots()
+
+    ax.set_xlabel(fig_x_label)
+    ax.set_ylabel(fig_y_label)
+    ax.set_title(fig_title)
+
+    for experiment_idx, experiment_readouts_dict in enumerate(experiments_readouts):
+        exp_name = experiment_readouts_dict.get('exp_name', '')
+        exp_x_readout = experiment_readouts_dict.get('x_readout', None)
+        exp_y_readout = experiment_readouts_dict.get('y_readout', None)
+        exp_color_map = experiment_readouts_dict.get('color_map', None)
+        exp_marker = experiment_readouts_dict.get('marker', 'o')
+        exp_plot_kwarg = experiment_readouts_dict.get('plot_kwargs', {})
+
+        if exp_x_readout is None or exp_y_readout is None:
+            raise ValueError('Must provide x readouts and y readouts for each experiment!')
+
+        # make sure we don't use color map and legend
+        if exp_name == '':
+            use_legend = False
+        if exp_color_map is None:
+            use_clr_map = False
+
+        if use_clr_map:
+            exp_min_value = exp_color_map.min() if exp_color_map.min() < exp_min_value else exp_min_value
+            exp_max_value = exp_color_map.max() if exp_color_map.max() > exp_max_value else exp_max_value
+
+            exp_plot_kwarg.pop('color', None)
+            if use_legend:
+                ax.scatter(exp_x_readout, exp_y_readout, marker=exp_marker, c=exp_color_map, cmap=cmap, label=exp_name,
+                           **exp_plot_kwarg)
+            else:
+                ax.scatter(exp_x_readout, exp_y_readout, marker=exp_marker, c=exp_color_map, cmap=cmap,
+                           **exp_plot_kwarg)
+        else:
+            if use_legend:
+                ax.scatter(exp_x_readout, exp_y_readout, marker=exp_marker, label=exp_name, **exp_plot_kwarg)
+            else:
+                ax.scatter(exp_x_readout, exp_y_readout, marker=exp_marker, **exp_plot_kwarg)
+
+    plt.tight_layout()
+
+    if use_legend:
+        plt.legend()
+    if use_clr_map:
+        norm = mpl.colors.Normalize(vmin=exp_min_value, vmax=exp_max_value)
+        plt.colorbar(cm.ScalarMappable(norm=norm, cmap=cmap), ax=ax, label=color_bar_label)
 
     present_fig(fig, ax,
                 measurement_type=measurement_type,

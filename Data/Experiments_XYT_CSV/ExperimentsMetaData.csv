@@ -100,3 +100,43 @@
 98,xyt_ferroptosis_attempt_no_healing_factor.csv, 2021.10.11, SIM,ferroptosis_attempt_no_healing_factor,6,,6.0,2021.10.11 SIM, SIM,15,242
 99,xyt_apoptosis_attempt_no_healing_factor.csv, 2021.10.11, SIM,apoptosis_attempt_no_healing_factor,6,,6.0,2021.10.11 SIM, SIM,15,242
 100,xyt_ferroptosis_attempt_HIGH_healing_rate.csv, 2021.10.11, SIM,ferroptosis_attempt_HIGH_healing_factor,6,,6.0,2021.10.11 SIM, SIM,15,230
+101,20170213_U937_FB_xy1_compressed_to_30.csv,2017.02.13,U937,RPMI+400uM FAC&BSO,1,"2017.02.13 U937,mix,Jurkat +FAC&BSO",1.0,u937_fbxy1t01c1.tif,Sytox,30,762
+102,20170213_U937_FB_xy2_compressed_to_30.csv,2017.02.13,U937,RPMI+400uM FAC&BSO,2,"2017.02.13 U937,mix,Jurkat +FAC&BSO",2.0,u937_fbxy2t01c1.tif,Sytox,30,700
+103,20170213_U937_FB_xy3_compressed_to_30.csv,2017.02.13,U937,RPMI+400uM FAC&BSO,3,"2017.02.13 U937,mix,Jurkat +FAC&BSO",3.0,u937_fbxy3t01c1.tif,Sytox,30,764
+104,20170213_U937_FB_xy4_compressed_to_30.csv,2017.02.13,U937,RPMI+400uM FAC&BSO,4,"2017.02.13 U937,mix,Jurkat +FAC&BSO",4.0,u937_fbxy4t01c1.tif,Sytox,30,843
+105,20170213_U937_FB_xy5_compressed_to_30.csv,2017.02.13,U937,RPMI+400uM FAC&BSO,5,"2017.02.13 U937,mix,Jurkat +FAC&BSO",5.0,u937_fbxy5t01c1.tif,Sytox,30,774
+106,20180514_HAP1_FB_xy1_compressed_to_30.csv,2018.05.14,HAP1,DMEM + 400uM FAC&BSO,1,"2018.05.14 HAP1 400,200uM FB -+PEG1450, HeLacPLA2 20mm osmo FB",1.0,hap1fbxy1t01c1.tif,Sytox,30,432
+107,20180514_HAP1_FB_xy2_compressed_to_30.csv,2018.05.14,HAP1,DMEM + 400uM FAC&BSO,2,"2018.05.14 HAP1 400,200uM FB -+PEG1450, HeLacPLA2 20mm osmo FB",2.0,hap1fbxy2t01c1.tif,Sytox,30,483
+108,20180514_HAP1_FB_xy3_compressed_to_30.csv,2018.05.14,HAP1,DMEM + 400uM FAC&BSO,3,"2018.05.14 HAP1 400,200uM FB -+PEG1450, HeLacPLA2 20mm osmo FB",3.0,hap1fbxy3t01c1.tif,Sytox,30,523
+109,20180514_HAP1_FB_xy4_compressed_to_30.csv,2018.05.14,HAP1,DMEM + 400uM FAC&BSO,4,"2018.05.14 HAP1 400,200uM FB -+PEG1450, HeLacPLA2 20mm osmo FB",4.0,hap1fbxy4t01c1.tif,Sytox,30,368
+110,20180514_HAP1_FB_xy5_compressed_to_30.csv,2018.05.14,HAP1,DMEM + 400uM FAC&BSO,5,"2018.05.14 HAP1 400,200uM FB -+PEG1450, HeLacPLA2 20mm osmo FB",5.0,hap1fbxy5t01c1.tif,Sytox,30,488
+111,20180620_HAP1_erastin_xy1_compressed_to_30.csv,2018.06.20,HAP1,DMEM+7.5uM erastin,1,"2018.06.20 HeLa cPLA2,HAP1FB osmo,200,400FB add,7.5era osmo",131.0,hap1eraxy01t01.tif,Sytox,30,40
+112,20180620_HAP1_erastin_xy10_compressed_to_30.csv,2018.06.20,HAP1,DMEM+7.5uM erastin,10,"2018.06.20 HeLa cPLA2,HAP1FB osmo,200,400FB add,7.5era osmo",140.0,hap1eraxy10t01.tif,Sytox,30,146
+113,20180620_HAP1_erastin_xy2_compressed_to_30.csv,2018.06.20,HAP1,DMEM+7.5uM erastin,2,"2018.06.20 HeLa cPLA2,HAP1FB osmo,200,400FB add,7.5era osmo",132.0,hap1eraxy02t01.tif,Sytox,30,82
+114,20180620_HAP1_erastin_xy3_compressed_to_30.csv,2018.06.20,HAP1,DMEM+7.5uM erastin,3,"2018.06.20 HeLa cPLA2,HAP1FB osmo,200,400FB add,7.5era osmo",133.0,hap1eraxy03t01.tif,Sytox,30,98
+115,20180620_HAP1_erastin_xy4_compressed_to_30.csv,2018.06.20,HAP1,DMEM+7.5uM erastin,4,"2018.06.20 HeLa cPLA2,HAP1FB osmo,200,400FB add,7.5era osmo",134.0,hap1eraxy04t01.tif,Sytox,30,104
+116,20180620_HAP1_erastin_xy5_compressed_to_30.csv,2018.06.20,HAP1,DMEM+7.5uM erastin,5,"2018.06.20 HeLa cPLA2,HAP1FB osmo,200,400FB add,7.5era osmo",135.0,hap1eraxy05t01.tif,Sytox,30,246
+117,20180620_HAP1_erastin_xy6_compressed_to_30.csv,2018.06.20,HAP1,DMEM+7.5uM erastin,6,"2018.06.20 HeLa cPLA2,HAP1FB osmo,200,400FB add,7.5era osmo",136.0,hap1eraxy06t01.tif,Sytox,30,170
+118,20180620_HAP1_erastin_xy7_compressed_to_30.csv,2018.06.20,HAP1,DMEM+7.5uM erastin,7,"2018.06.20 HeLa cPLA2,HAP1FB osmo,200,400FB add,7.5era osmo",137.0,hap1eraxy07t01.tif,Sytox,30,110
+119,20180620_HAP1_erastin_xy8_compressed_to_30.csv,2018.06.20,HAP1,DMEM+7.5uM erastin,8,"2018.06.20 HeLa cPLA2,HAP1FB osmo,200,400FB add,7.5era osmo",138.0,hap1eraxy08t01.tif,Sytox,30,131
+120,20180620_HAP1_erastin_xy9_compressed_to_30.csv,2018.06.20,HAP1,DMEM+7.5uM erastin,9,"2018.06.20 HeLa cPLA2,HAP1FB osmo,200,400FB add,7.5era osmo",139.0,hap1eraxy09t01.tif,Sytox,30,134
+121,20181227_MCF10A_SKT_xy1_compressed_to_30.csv,2018.12.27,MCF10A,DMEM/F12+50ng/mL superkiller TRAIL,1,2018.12.27 10A superkillertrail,21.0,10a_sktxy1c1t01.jpg,DIC morphology,30,165
+122,20181227_MCF10A_SKT_xy2_compressed_to_30.csv,2018.12.27,MCF10A,DMEM/F12+50ng/mL superkiller TRAIL,2,2018.12.27 10A superkillertrail,22.0,10a_sktxy2c1t01.jpg,DIC morphology,30,140
+123,20181227_MCF10A_SKT_xy3_compressed_to_30.csv,2018.12.27,MCF10A,DMEM/F12+50ng/mL superkiller TRAIL,3,2018.12.27 10A superkillertrail,23.0,10a_sktxy3c1t01.jpg,DIC morphology,30,209
+124,20181227_MCF10A_SKT_xy4_compressed_to_30.csv,2018.12.27,MCF10A,DMEM/F12+50ng/mL superkiller TRAIL,4,2018.12.27 10A superkillertrail,24.0,10a_sktxy4c1t01.jpg,DIC morphology,30,190
+125,20181227_MCF10A_SKT_xy5_compressed_to_30.csv,2018.12.27,MCF10A,DMEM/F12+50ng/mL superkiller TRAIL,5,2018.12.27 10A superkillertrail,25.0,10a_sktxy5c1t01.jpg,DIC morphology,30,160
+126,20181229_HAP1-920H_FB+PEG1450_GCAMP_xy51_compressed_to_30.csv,2018.12.29,HAP1 920 clone H,DMEM + 400uM FAC&BSO + 20mM PEG1450,51,"2018.12.29 HAP1 920A,B,F,H -+ PEGs no phenol red",51.0,20181229hap1_920hpeg_xy01t01c1.tif,GCAMP,30,254
+127,20181229_HAP1-920H_FB+PEG1450_GCAMP_xy52_compressed_to_30.csv,2018.12.29,HAP1 920 clone H,DMEM + 400uM FAC&BSO + 20mM PEG1450,52,"2018.12.29 HAP1 920A,B,F,H -+ PEGs no phenol red",52.0,20181229hap1_920hpeg_xy02t01c1.tif,GCAMP,30,217
+128,20181229_HAP1-920H_FB+PEG1450_GCAMP_xy53_compressed_to_30.csv,2018.12.29,HAP1 920 clone H,DMEM + 400uM FAC&BSO + 20mM PEG1450,53,"2018.12.29 HAP1 920A,B,F,H -+ PEGs no phenol red",53.0,20181229hap1_920hpeg_xy03t01c1.tif,GCAMP,30,235
+129,20181229_HAP1-920H_FB+PEG1450_GCAMP_xy54_compressed_to_30.csv,2018.12.29,HAP1 920 clone H,DMEM + 400uM FAC&BSO + 20mM PEG1450,54,"2018.12.29 HAP1 920A,B,F,H -+ PEGs no phenol red",54.0,20181229hap1_920hpeg_xy04t01c1.tif,GCAMP,30,105
+130,20181229_HAP1-920H_FB+PEG1450_GCAMP_xy55_compressed_to_30.csv,2018.12.29,HAP1 920 clone H,DMEM + 400uM FAC&BSO + 20mM PEG1450,55,"2018.12.29 HAP1 920A,B,F,H -+ PEGs no phenol red",55.0,20181229hap1_920hpeg_xy05t01c1.tif,GCAMP,30,229
+131,20181229_HAP1-920H_FB+PEG3350_GCAMP_xy56_compressed_to_30.csv,2018.12.29,HAP1 920 clone H,DMEM + 400uM FAC&BSO + 20mM PEG3350,56,"2018.12.29 HAP1 920A,B,F,H -+ PEGs no phenol red",56.0,20181229hap1_920hpeg_xy06t01c1.tif,GCAMP,30,254
+132,20181229_HAP1-920H_FB+PEG3350_GCAMP_xy57_compressed_to_30.csv,2018.12.29,HAP1 920 clone H,DMEM + 400uM FAC&BSO + 20mM PEG3350,57,"2018.12.29 HAP1 920A,B,F,H -+ PEGs no phenol red",57.0,20181229hap1_920hpeg_xy07t01c1.tif,GCAMP,30,198
+133,20181229_HAP1-920H_FB+PEG3350_GCAMP_xy58_compressed_to_30.csv,2018.12.29,HAP1 920 clone H,DMEM + 400uM FAC&BSO + 20mM PEG3350,58,"2018.12.29 HAP1 920A,B,F,H -+ PEGs no phenol red",58.0,20181229hap1_920hpeg_xy08t01c1.tif,GCAMP,30,209
+134,20181229_HAP1-920H_FB+PEG3350_GCAMP_xy59_compressed_to_30.csv,2018.12.29,HAP1 920 clone H,DMEM + 400uM FAC&BSO + 20mM PEG3350,59,"2018.12.29 HAP1 920A,B,F,H -+ PEGs no phenol red",59.0,20181229hap1_920hpeg_xy09t01c1.tif,GCAMP,30,245
+135,20181229_HAP1-920H_FB+PEG3350_GCAMP_xy60_compressed_to_30.csv,2018.12.29,HAP1 920 clone H,DMEM + 400uM FAC&BSO + 20mM PEG3350,60,"2018.12.29 HAP1 920A,B,F,H -+ PEGs no phenol red",60.0,20181229hap1_920hpeg_xy10t01c1.tif,GCAMP,30,383
+136,20181229_HAP1-920H_FB_GCAMP_xy46_compressed_to_30.csv,2018.12.29,HAP1 920 clone H,DMEM + 400uM FAC&BSO,46,"2018.12.29 HAP1 920A,B,F,H -+ PEGs no phenol red",46.0,20181229hap1_920hfb_xy1t01c1.tif,GCAMP,30,246
+137,20181229_HAP1-920H_FB_GCAMP_xy47_compressed_to_30.csv,2018.12.29,HAP1 920 clone H,DMEM + 400uM FAC&BSO,47,"2018.12.29 HAP1 920A,B,F,H -+ PEGs no phenol red",47.0,20181229hap1_920hfb_xy2t01c1.tif,GCAMP,30,247
+138,20181229_HAP1-920H_FB_GCAMP_xy48_compressed_to_30.csv,2018.12.29,HAP1 920 clone H,DMEM + 400uM FAC&BSO,48,"2018.12.29 HAP1 920A,B,F,H -+ PEGs no phenol red",48.0,20181229hap1_920hfb_xy3t01c1.tif,GCAMP,30,221
+139,20181229_HAP1-920H_FB_GCAMP_xy49_compressed_to_30.csv,2018.12.29,HAP1 920 clone H,DMEM + 400uM FAC&BSO,49,"2018.12.29 HAP1 920A,B,F,H -+ PEGs no phenol red",49.0,20181229hap1_920hfb_xy4t01c1.tif,GCAMP,30,232
+80,20181229_HAP1-920H_FB_GCAMP_xy50_compressed_to_30.csv,2018.12.29,HAP1 920 clone H,DMEM + 400uM FAC&BSO,50,"2018.12.29 HAP1 920A,B,F,H -+ PEGs no phenol red",50.0,20181229hap1_920hfb_xy5t01c1.tif,GCAMP,30,263
