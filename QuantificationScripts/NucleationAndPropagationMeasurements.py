@@ -1,5 +1,6 @@
-import copy
 import os
+import sys
+import copy
 from typing import *
 
 import matplotlib.pyplot as plt
@@ -9,6 +10,7 @@ from enum import IntEnum, unique
 from utils import *
 from global_parameters import *
 from Visualization import *
+sys.path.append("/Users/yishaiazabary/PycharmProjects/University/CellDeathQuantification/QuantificationScripts")
 from SPICalculator import SPICalculator as spiCalc
 
 
@@ -22,7 +24,8 @@ def get_all_neighbors_or_not_neighbors_of_dead_cells_indices_and_mask(cells_time
                                                                       cells_neighbors: List[List],
                                                                       timeframe_to_analyze: int,
                                                                       nuc_or_prop_mode: NucOrProp,
-                                                                      recently_dead_only_mode: bool = False) -> Tuple[
+                                                                      recently_dead_only_mode: bool = False,
+                                                                      **kwargs) -> Tuple[
     np.array, np.array]:
     """
     returns the indices and mask of all cells that either neighbors of dead cells and are alive (mode=NucOrProp.PROP)
@@ -162,8 +165,12 @@ def get_nucleation_candidates_pnuc_and_number_of_nucleators_in_timeframe(cells_t
                                                                           recently_dead_only_mode=
                                                                           only_recent_death_flag_for_neighbors_calc)
     # get all cells indexes that die next timeframe
-    dead_cells_indices_at_next_time_frame = \
-        np.where(cells_times_of_death == timeframe_to_analyze + temporal_resolution)[0]
+    if kwargs.get('sliding_time_window_size', None) is not None:
+        dead_cells_indices_at_next_time_frame = np.where(np.logical_and(cells_times_of_death <= timeframe_to_analyze +
+                                kwargs.get("sliding_time_window_size"), cells_times_of_death >= timeframe_to_analyze))[0]
+    else:
+        dead_cells_indices_at_next_time_frame = \
+            np.where(cells_times_of_death == timeframe_to_analyze + temporal_resolution)[0]
     # get nucleators by intersecting cells that die on next frame, and nucleation candidates
     possible_nucleators_indices = np.intersect1d(dead_cells_indices_at_next_time_frame, nucleation_candidates_indices)
 
@@ -230,10 +237,15 @@ def get_propagation_candidates_pprop_and_number_of_propagators_in_timeframe(cell
                                                                           timeframe_to_analyze=timeframe_to_analyze,
                                                                           nuc_or_prop_mode=NucOrProp.PROP,
                                                                           recently_dead_only_mode=
-                                                                          only_recent_death_flag_for_neighbors_calc)
+                                                                          only_recent_death_flag_for_neighbors_calc,
+                                                                          **kwargs)
     # get all cells indexes that die next timeframe
-    dead_cells_indices_at_next_time_frame = \
-        np.where(cells_times_of_death == timeframe_to_analyze + temporal_resolution)[0]
+    if kwargs.get("sliding_time_window_size") is not None:
+        dead_cells_indices_at_next_time_frame = np.where(np.logical_and(cells_times_of_death <= timeframe_to_analyze +
+                                                    kwargs.get("sliding_time_window_size"), cells_times_of_death >= timeframe_to_analyze))[0]
+    else:
+        dead_cells_indices_at_next_time_frame = \
+            np.where(cells_times_of_death == timeframe_to_analyze + temporal_resolution)[0]
     # get propagators by intersecting cells that die on next frame, and propagation candidates
     propagators_indices = np.intersect1d(dead_cells_indices_at_next_time_frame, propagation_candidates_indices)
 
@@ -278,11 +290,16 @@ def calc_single_time_frame_p_nuc_p_prop_probabilities_and_nucleators_and_propaga
      accumulated time of death
     """
 
-    only_recent_death_flag_for_neighbors_calc = kwargs.get('only_recent_death_flag_for_neighbors_calc', False)
-
+    # only_recent_death_flag_for_neighbors_calc = kwargs.get('only_recent_death_flag_for_neighbors_calc', False)
     # get total death & alive cell indices
     total_alive_in_current_frame_indices = np.where(cells_times_of_death > timeframe_to_analyze)[0]
-    total_dead_in_next_frame_indices = np.where(cells_times_of_death == timeframe_to_analyze + temporal_resolution)[0]
+    # todo: add support for minutes dependent time window (and not simple t+temporal_resolution time window only)
+    if kwargs.get("sliding_time_window_size") is not None:
+        total_dead_in_next_frame_indices = np.where(np.logical_and(cells_times_of_death <= timeframe_to_analyze +
+                                                    kwargs.get("sliding_time_window_size"), cells_times_of_death >= timeframe_to_analyze))[0]
+    else:
+        total_dead_in_next_frame_indices = np.where(cells_times_of_death == timeframe_to_analyze +
+                                                    temporal_resolution)[0]
 
     # propagation extracted data
     propagation_candidates_indices, \
@@ -294,7 +311,8 @@ def calc_single_time_frame_p_nuc_p_prop_probabilities_and_nucleators_and_propaga
         cells_neighbors=cells_neighbors,
         timeframe_to_analyze=timeframe_to_analyze,
         temporal_resolution=temporal_resolution,
-        only_recent_death_flag_for_neighbors_calc=only_recent_death_flag_for_neighbors_calc
+        # only_recent_death_flag_for_neighbors_calc=only_recent_death_flag_for_neighbors_calc,
+        **kwargs
     )
 
     # nucleation extracted data
@@ -309,7 +327,8 @@ def calc_single_time_frame_p_nuc_p_prop_probabilities_and_nucleators_and_propaga
         cells_neighbors=cells_neighbors,
         timeframe_to_analyze=timeframe_to_analyze,
         temporal_resolution=temporal_resolution,
-        only_recent_death_flag_for_neighbors_calc=only_recent_death_flag_for_neighbors_calc
+        # only_recent_death_flag_for_neighbors_calc=only_recent_death_flag_for_neighbors_calc
+        **kwargs
     )
 
     propagators_indices = np.array(propagators_indices.tolist() + propagators_to_add_indices.tolist())
@@ -317,9 +336,13 @@ def calc_single_time_frame_p_nuc_p_prop_probabilities_and_nucleators_and_propaga
     p_prop = calc_fraction_from_candidates(dead_cells_at_time_indices=propagators_indices,
                                            candidates_indices=np.array(propagation_candidates_indices.tolist() +
                                                                        propagators_to_add_indices.tolist()))
-
-    accumulated_fraction_of_death = (cells_times_of_death <= (timeframe_to_analyze + temporal_resolution)).sum() / len(
-        cells_times_of_death)
+    if kwargs.get("sliding_time_window_size") is not None:
+        accumulated_fraction_of_death = (cells_times_of_death <= (timeframe_to_analyze +
+                                                    kwargs.get("sliding_time_window_size"))).sum() / len(
+            cells_times_of_death)
+    else:
+        accumulated_fraction_of_death = (cells_times_of_death <= (timeframe_to_analyze + temporal_resolution)).sum() / len(
+            cells_times_of_death)
 
     return p_prop, p_nuc, propagators_indices, \
            nucleators_indices, \
@@ -342,15 +365,18 @@ def calc_single_experiment_temporal_p_nuc_and_p_prop_and_endpoint_readouts_provi
     """
     assert temporal_resolution, f'temporal resolution must not be None or negative! the value is f{temporal_resolution}'
 
-    only_recent_death_flag_for_neighbors_calc = kwargs.get('only_recent_death_flag_for_neighbors_calc', False)
+    # only_recent_death_flag_for_neighbors_calc = kwargs.get('only_recent_death_flag_for_neighbors_calc', False)
 
     cells_loci, cells_times_of_death = read_experiment_cell_xy_and_death_times(exp_full_path=single_exp_full_path)
     all_death_times_unique = np.unique(cells_times_of_death)
 
     # adds a fake frame before the start of the experiment to calc nucleation and propagation events at first frame
-    all_death_times_unique = np.arange(-temporal_resolution, all_death_times_unique.max(),
-                                       temporal_resolution)
-    # all_death_times_unique = np.array([-explicit_temporal_resolution] + all_death_times_unique.tolist())
+    if kwargs.get("sliding_time_window_size") is not None:
+        all_death_times_unique = np.arange(-kwargs.get("sliding_time_window_size"), all_death_times_unique.max(),
+                                           kwargs.get("sliding_time_window_size"))
+    else:
+        all_death_times_unique = np.arange(-temporal_resolution, all_death_times_unique.max(),
+                                           temporal_resolution)
 
     dist_threshold = kwargs.get('dist_threshold', DIST_THRESHOLD_IN_PIXELS)
     cells_neighbors_lvl1, cells_neighbors_lvl2, cells_neighbors_lvl3 = get_cells_neighbors(XY=cells_loci,
@@ -377,7 +403,7 @@ def calc_single_experiment_temporal_p_nuc_and_p_prop_and_endpoint_readouts_provi
                 cells_neighbors=cells_neighbors_lvl1,
                 timeframe_to_analyze=current_time,
                 temporal_resolution=temporal_resolution,
-                only_recent_death_flag_for_neighbors_calc=only_recent_death_flag_for_neighbors_calc)
+            **kwargs)
 
         p_prop_by_time[time_frame_idx] = single_frame_p_prop
         p_nuc_by_time[time_frame_idx] = single_frame_p_nuc
@@ -416,7 +442,10 @@ def calc_single_experiment_temporal_p_nuc_and_p_prop_and_endpoint_readouts_expli
     compressed_flag = False
     if 'compressed' in single_exp_full_path.lower():
         compressed_flag = True
-    meta_data_path = os.sep.join(single_exp_full_path.split(os.sep)[:-2] + ['ExperimentsMetaData.csv'])
+    if kwargs.get("meta_data_path") is None:
+        meta_data_path = os.sep.join(single_exp_full_path.split(os.sep)[:-2] + ['ExperimentsMetaData.csv'])
+    else:
+        meta_data_path = kwargs.get("meta_data_path")
 
     exp_treatment, explicit_temporal_resolution = \
         get_exp_treatment_type_and_temporal_resolution(single_exp_full_path.split(os.sep)[-1],
@@ -449,8 +478,8 @@ def calc_and_visualize_all_experiments_csvs_in_dir(dir_path: str = None,
     :return: endpoint readouts:
         all_global_p_nuc - np.array, all_global_p_prop - np.array, all_treatment_types - np.array
     """
-    only_recent_death_flag_for_neighbors_calc = kwargs.get('only_recent_death_flag_for_neighbors_calc',
-                                                           RECENT_DEATH_ONLY_FLAG)
+    # only_recent_death_flag_for_neighbors_calc = kwargs.get('only_recent_death_flag_for_neighbors_calc',
+    #                                                        RECENT_DEATH_ONLY_FLAG)
     treatments_to_include = kwargs.get('treatments_to_include', 'all')
     temporal_resolutions_to_include = kwargs.get('temporal_resolutions_to_include', [30])
 
@@ -505,7 +534,7 @@ def calc_and_visualize_all_experiments_csvs_in_dir(dir_path: str = None,
         accumulated_fraction_of_death_by_time = \
             calc_single_experiment_temporal_p_nuc_and_p_prop_and_endpoint_readouts_explicit_temporal_resolution(
                 single_exp_full_path=file_full_path,
-                only_recent_death_flag_for_neighbors_calc=only_recent_death_flag_for_neighbors_calc)
+                **kwargs)
 
         all_treatment_types.append(exp_treatment)
         all_temporal_resolutions.append(exp_temporal_res)
@@ -2096,7 +2125,8 @@ def calc_proba_for_death_decision_at_x_dead_neighbors_and_delta_tod(neighbors_li
                                                                     cells_tods: np.array,
                                                                     all_timepoints_minutes: Union[np.array, List[int], set],
                                                                     n_dead_neighbors: int,
-                                                                    delta_time_to_die_by: int):
+                                                                    delta_time_to_die_by: int,
+                                                                    **kwargs):
     """
     calculates the probability for cells to die under two constraints -
         1. #dead neighbors as a given integer (n_dead_neighbors argument).
@@ -2130,20 +2160,12 @@ def calc_proba_for_death_decision_at_x_dead_neighbors_and_delta_tod(neighbors_li
             if len(xy) == n_dead_neighbors and cell_idx not in alive_cells_at_time_x1:
                 dead_with_x_dead_at_time_x1_ctr.add(cell_idx)
                 examined_cells.add(cell_idx)
-        # todo: attempt to use numpy fast fancy indexing to reduce runtime:
-        # getting all neighbors lists of cells that are not dead.
-        # neighbors_list_np = np.array(neighbors_list, dtype=object)
-        # neighbors_mask = np.ones_like(neighbors_list_np, dtype=bool)
-        # neighbors_mask[dead_cells_at_time_x] = False
-        # neighbors_of_alive_cells = neighbors_list_np[neighbors_mask]
-        # not working yet:
-        # n_dead_neighbors_in_neighbors_list = np.vectorize(lambda x: np.intersect1d(dead_cells_at_time_x, np.array(x)))(neighbors_of_alive_cells)
 
+    divisor = (len(alive_with_x_dead_at_time_x1_ctr) + len(dead_with_x_dead_at_time_x1_ctr))
+    if divisor <= 0:
+        return 0
 
-
-
-
-    return len(dead_with_x_dead_at_time_x1_ctr)/(len(alive_with_x_dead_at_time_x1_ctr) + len(dead_with_x_dead_at_time_x1_ctr))
+    return len(dead_with_x_dead_at_time_x1_ctr)/divisor
 
 
 def calc_propagation_by_number_of_dead_neighbors_and_time_from_recent_neighbors_death(
@@ -2151,7 +2173,7 @@ def calc_propagation_by_number_of_dead_neighbors_and_time_from_recent_neighbors_
         cells_locis: np.array,
         exp_temporal_resolution: int,
         max_number_of_dead_neighbors_to_calc: int,
-        max_delta_tod_from_recently_dead_neighbor_frame_num: int,
+        max_delta_tods_from_recently_dead_neighbor_frame_num: int,
         **kwargs
 ) -> np.array:
     """
@@ -2161,18 +2183,42 @@ def calc_propagation_by_number_of_dead_neighbors_and_time_from_recent_neighbors_
     the maximum value.
     NOTE - max_delta_tod_from_recently_dead_neighbor_frame_num is given as number of frames, but is translated to the
     time delta in minutes during the calculation of this function.
-    :param cells_tods:
-    :param cells_locis:
-    :param cells_temporal_resolution:
+    :param cells_tods: cells' time of death in minutes.
+    :param cells_locis: cells' location coordinates (x, y)
+    :param exp_temporal_resolution: the experiments' temporal resolution, not used when kwargs.sliding_time_window_size
+        is not None.
+    :param max_number_of_dead_neighbors_to_calc: the maximum number of dead neighbors to calculate NRF for.
+    :param max_delta_tods_from_recently_dead_neighbor_frame_num:  the max *number* of ∆TOD (each one defined by either
+        the experiment's temporal resolution or kwargs.sliding_time_window_size values) to calculate NRF for.
     :param kwargs:
     :return:
     """
     ignore_out_of_bounds_cells = kwargs.get('ignore_out_of_bounds_cells', False)
-    all_time_frames_minutes = np.arange(cells_tods.min(), cells_tods.max()+1, exp_temporal_resolution)
+    if kwargs.get("sliding_time_window_size") is not None:
+        all_time_frames_minutes = np.arange(cells_tods.min(),
+                                            # 'sliding_time_window_size-1' to make sure we don't include
+                                            #   a non-existent frame if the cells_tods.max() divides with no
+                                            #   remainder by the sliding_time_window_size:
+                                            cells_tods.max()+kwargs.get("sliding_time_window_size")-1,
+                                            kwargs.get("sliding_time_window_size"))
+    else:
+        all_time_frames_minutes = np.arange(cells_tods.min(), cells_tods.max()+1, exp_temporal_resolution)
 
-    cells_neighbors_lvl1, cells_neighbors_lvl2, cells_neighbors_lvl3 = get_cells_neighbors(XY=cells_locis)
+    dist_threshold = kwargs.get('dist_threshold', DIST_THRESHOLD_IN_PIXELS)
+    cells_neighbors_lvl1, cells_neighbors_lvl2, cells_neighbors_lvl3 = get_cells_neighbors(XY=cells_locis,
+                                                                                           threshold_dist=dist_threshold
+                                                                                           )
+    if kwargs.get("sliding_time_window_size") is not None:
+        time_differences_to_calc = np.arange(kwargs.get("sliding_time_window_size"),
+                                             (max_delta_tods_from_recently_dead_neighbor_frame_num *
+                                              kwargs.get("sliding_time_window_size")) + 1,
+                                             kwargs.get("sliding_time_window_size"))
+    else:
+        time_differences_to_calc = np.arange(exp_temporal_resolution,
+                                             (max_delta_tods_from_recently_dead_neighbor_frame_num *
+                                              exp_temporal_resolution)+1,
+                                             exp_temporal_resolution)
 
-    time_differences_to_calc = np.arange(exp_temporal_resolution, (max_delta_tod_from_recently_dead_neighbor_frame_num * exp_temporal_resolution)+1,exp_temporal_resolution)
     num_of_dead_neighbors_to_calc = np.arange(1, max_number_of_dead_neighbors_to_calc + 1, 1)
 
     proba_map = np.zeros((len(time_differences_to_calc), len(num_of_dead_neighbors_to_calc)))
@@ -2184,8 +2230,8 @@ def calc_propagation_by_number_of_dead_neighbors_and_time_from_recent_neighbors_
                     cells_tods=cells_tods,
                     all_timepoints_minutes=all_time_frames_minutes,
                     n_dead_neighbors=num_of_dead_neighbors,
-                    delta_time_to_die_by=time_difference)
-
+                    delta_time_to_die_by=time_difference,
+                **kwargs)
 
     return proba_map
 
@@ -2201,15 +2247,18 @@ def calc_factor_of_propagation_by_number_of_dead_neighbors_and_time_from_recent_
     calculates the factor change between mean probability of a cell to die given #dead_neighbors and delta time of death
     between cells and their neighbors most recent time of death.
 
-    :param exp_path:
+    :param exp_path: str the path the experiment's cell times of death events df.
     :param max_number_of_dead_neighbors_to_calc:
     :param max_delta_tod_from_recently_dead_neighbor:
     :return:
     """
-    # kwargs:
+
     if isinstance(exp_name, list):
+        # if the input is multiple experiments (a *list* of experiments names), iterate over all recursively
+        #   and aggregate results.
         results = {}
         for exp in exp_name:
+            print(f"analyzing experiment: {exp}")
             res = calc_factor_of_propagation_by_number_of_dead_neighbors_and_time_from_recent_neighbors_death(
                 exp_name=exp,
                 exps_dir_path=exps_dir_path,
@@ -2217,62 +2266,78 @@ def calc_factor_of_propagation_by_number_of_dead_neighbors_and_time_from_recent_
                 max_delta_tod_from_recently_dead_neighbor=max_delta_tod_from_recently_dead_neighbor,
                 meta_data_full_file_path=meta_data_full_file_path, **kwargs
             )
+            if res is None:
+                continue
             results[exp] = res
         return results
     cbarlabel = kwargs.get('cbarlabel', 'factor of non randomly')
     number_of_random_permutations = kwargs.get('number_of_random_permutations', 1000)
-    fig_title = kwargs.get('fig_title', f'Factor of change\nbetween experiment and random permutations\n{exp_name}\n#Permutations:{number_of_random_permutations}')
+    fig_title = kwargs.get('fig_title',
+                           f'Factor of change\nbetween experiment and random permutations\n'
+                           f'{exp_name}\n#Permutations:{number_of_random_permutations}'
+                           f'{f" |with sliding time window" if kwargs.get("sliding_time_window_size") is not None else ""}')
     cbar_kwargs = kwargs.get('cbar_kwargs', {})
 
     exp_full_path = os.path.join(exps_dir_path, exp_name)
     exp_treatment, exp_temporal_resolution = get_exp_treatment_type_and_temporal_resolution(exp_file_name=exp_name,
                                                                                             meta_data_file_full_path=meta_data_full_file_path)
 
+    if not any([x.lower() in exp_treatment.lower() for x in kwargs.get('include_only_treatments', [])]):
+        return None
+
     cells_locis, cells_tods = read_experiment_cell_xy_and_death_times(exp_full_path=exp_full_path)
-
-
-    org_cells_death_probabilities_by_n_neighbors_and_delta_tods =\
+    # Calculating global rate of death - unrelated to NRF calculation:
+    global_rate_of_death_per_timeframe = {}
+    accumalated_rate = 0
+    for timeframe in np.unique(cells_tods):
+        n_cells_death_in_timeframe = len(cells_tods[cells_tods==timeframe])
+        current_timeframe_fraction = n_cells_death_in_timeframe/len(cells_locis)
+        accumalated_rate += current_timeframe_fraction
+        global_rate_of_death_per_timeframe[timeframe] = accumalated_rate
+    # unrelated to NRF calculation END
+    # calculating probability heatmap for original experiment CSV (loci, times of death)
+    org_cells_death_probabilities_by_n_neighbors_and_delta_tods = \
         calc_propagation_by_number_of_dead_neighbors_and_time_from_recent_neighbors_death(cells_tods=cells_tods,
                                                                                           cells_locis=cells_locis,
                                                                                           exp_temporal_resolution=exp_temporal_resolution,
                                                                                           max_number_of_dead_neighbors_to_calc=max_number_of_dead_neighbors_to_calc,
-                                                                                          max_delta_tod_from_recently_dead_neighbor_frame_num=max_delta_tod_from_recently_dead_neighbor)
+                                                                                          max_delta_tods_from_recently_dead_neighbor_frame_num=max_delta_tod_from_recently_dead_neighbor,
+                                                                                          **kwargs)
     # generate 'number_of_random_permutations' random permutations of cells times of death
     #   and calculate each permutation probability map, then calculate the difference factor
     #   between each on and the original.
     factor_of_change_map_for_all_permutations = np.zeros(shape=(number_of_random_permutations,
-                                           max_delta_tod_from_recently_dead_neighbor,
-                                           max_number_of_dead_neighbors_to_calc))
+                                                                max_delta_tod_from_recently_dead_neighbor,
+                                                                max_number_of_dead_neighbors_to_calc))
     for permutation_number in range(number_of_random_permutations):
         print(f"Randomizing cells' TODs - permutation #{permutation_number}")
         permuted_cells_tods = cells_tods.copy()
         np.random.shuffle(permuted_cells_tods)
         assert not (permuted_cells_tods==cells_tods).all(), f'Shuffle failed!'
 
-        randomaly_permuted_cells_death_probabilities_by_n_neighbors_and_delta_tods =\
+        randomaly_permuted_cells_death_probabilities_by_n_neighbors_and_delta_tods = \
             calc_propagation_by_number_of_dead_neighbors_and_time_from_recent_neighbors_death(
                 cells_tods=permuted_cells_tods,
                 cells_locis=cells_locis,
                 exp_temporal_resolution=exp_temporal_resolution,
                 max_number_of_dead_neighbors_to_calc=max_number_of_dead_neighbors_to_calc,
-                max_delta_tod_from_recently_dead_neighbor_frame_num=max_delta_tod_from_recently_dead_neighbor)
+                max_delta_tods_from_recently_dead_neighbor_frame_num=max_delta_tod_from_recently_dead_neighbor,
+            **kwargs)
 
         factor_of_change_map_for_all_permutations[permutation_number, :, :] = np.divide(
             org_cells_death_probabilities_by_n_neighbors_and_delta_tods,
-        randomaly_permuted_cells_death_probabilities_by_n_neighbors_and_delta_tods,
+            randomaly_permuted_cells_death_probabilities_by_n_neighbors_and_delta_tods,
             # out=,
             where=randomaly_permuted_cells_death_probabilities_by_n_neighbors_and_delta_tods!=0)
-            # org_cells_death_probabilities_by_n_neighbors_and_delta_tods /   \
-            # randomaly_permuted_cells_death_probabilities_by_n_neighbors_and_delta_tods
+        # org_cells_death_probabilities_by_n_neighbors_and_delta_tods /   \
+        # randomaly_permuted_cells_death_probabilities_by_n_neighbors_and_delta_tods
     # calculate average factor of change between
     factor_of_change_map = np.mean(factor_of_change_map_for_all_permutations, axis=0)
-
-
 
     plt.clf()
     fig, ax = plt.subplots()
 
-    im = ax.imshow(factor_of_change_map, cmap="YlGn", vmin=0.8, vmax=3)
+    im = ax.imshow(factor_of_change_map, cmap="YlGn", vmin=kwargs.get('fig_v_min', 1.), vmax=kwargs.get('fig_v_max', 5.))
     cbar = ax.figure.colorbar(im, ax=ax, **cbar_kwargs)
     cbar.ax.set_ylabel(cbarlabel, rotation=-90, va="bottom")
     num_neighbors_to_calc = np.arange(0, max_number_of_dead_neighbors_to_calc, 1)
@@ -2281,19 +2346,50 @@ def calc_factor_of_propagation_by_number_of_dead_neighbors_and_time_from_recent_
     ax.set_yticks(delta_in_tod_to_calc)
     ax.set_xticklabels([f"{n+1}" for n in num_neighbors_to_calc])
     ax.set_xlabel('number of dead neighbors at death time-1')
-    ax.set_yticklabels([f"{(t+1)*exp_temporal_resolution}" for t in delta_in_tod_to_calc])
+    temporal_multiplier = exp_temporal_resolution if kwargs.get("sliding_time_window_size") is None else kwargs.get("sliding_time_window_size")
+    ax.set_yticklabels([f"{(t+1)*temporal_multiplier}" for t in delta_in_tod_to_calc])
     ax.set_ylabel('death time difference')
     ax.set_title(fig_title)
     for i in num_neighbors_to_calc:
         for j in delta_in_tod_to_calc:
             text = ax.text(j, i, np.float16(factor_of_change_map[i, j]),
                            ha="center", va="center", color="black")
+
+
+    exp_treatment = exp_treatment.replace(os.sep, '_')
+    if kwargs.get("dir_path_to_save_nrf_plots", None) is not None:
+        dir_path_to_save = os.path.join(kwargs.get("dir_path_to_save_nrf_plots"), f'HigherScale{kwargs.get("fig_v_min", 1):.1f}_{kwargs.get("fig_v_max", 5.):.1f}', f'{exp_treatment}')
+    else:
+        dir_path_to_save = os.path.join('..','Results','NonRandomalityFactorResults', f'HigherScale{kwargs.get("fig_v_min", 1):.1f}_{kwargs.get("fig_v_max", 5.):.1f}', f'{exp_treatment}')
+
+    # saving mid calc results:
+    if kwargs.get("Save_Mid_Calc_Dir", kwargs.get("dir_path_to_save_nrf_plots", os.path.join('..',
+                                                    'Results',
+                                                    'NonRandomalityFactorResults',
+                                                    f'{exp_treatment}'))) is not None:
+        dir_for_mid_calc_results = kwargs.get("Save_Mid_Calc_Dir", kwargs.get("dir_path_to_save_nrf_plots", os.path.join('..',
+                                                    'Results',
+                                                    'NonRandomalityFactorResults',
+                                                    f'{exp_treatment}')))
+        os.makedirs(dir_for_mid_calc_results, exist_ok=True)
+        np.save(os.path.join(dir_for_mid_calc_results, f'{exp_name}_org_cells_death_probabilities_neighbors_{len(num_neighbors_to_calc)}_tods_{len(delta_in_tod_to_calc)}.npy'),
+                org_cells_death_probabilities_by_n_neighbors_and_delta_tods)
+        np.save(os.path.join(dir_for_mid_calc_results, f'{exp_name}_factor_of_change_map_{len(num_neighbors_to_calc)}_tods_{len(delta_in_tod_to_calc)}.npy'),
+         factor_of_change_map)
+
+    if kwargs.get('save_fig', SAVEFIG):
+        os.makedirs(dir_path_to_save, exist_ok=True)
+        fig_path_png = os.path.join(dir_path_to_save, f"{exp_name}.png")
+        fig_path_eps = os.path.join(dir_path_to_save, f"{exp_name}.eps")
+        plt.savefig(fig_path_eps, dpi=300)
+        plt.savefig(fig_path_png, dpi=300)
+
     if kwargs.get('show_fig', SHOWFIG):
         plt.show()
     plt.close()
 
-    # cells_death_probabilities_by_n_neighbors_and_delta_tods_factor_change = randomaly_permuted_cells_death_probabilities_by_n_neighbors_and_delta_tods / org_cells_death_probabilities_by_n_neighbors_and_delta_tods
-    return factor_of_change_map
+    cells_death_probabilities_by_n_neighbors_and_delta_tods_factor_change = randomaly_permuted_cells_death_probabilities_by_n_neighbors_and_delta_tods / org_cells_death_probabilities_by_n_neighbors_and_delta_tods
+    return {"factor_of_change_map": cells_death_probabilities_by_n_neighbors_and_delta_tods_factor_change, "global_rate_of_death_per_timeframe": global_rate_of_death_per_timeframe}
 
 
 
@@ -2584,13 +2680,59 @@ def calc_factor_of_propagation_by_number_of_dead_neighbors_and_time_from_recent_
 #     calc_accumulated_fraction_of_death_and_rate(exp_names, experiments_main_dir_path)
 
 if __name__ == '__main__':
-    experiments_main_dir_path = 'C:\\Users\\User\\PycharmProjects\\CellDeathQuantification\\Data\\Experiments_XYT_CSV\\OriginalTimeMinutesData'
-    meta_data_file_path = 'C:\\Users\\User\\PycharmProjects\\CellDeathQuantification\\Data\\Experiments_XYT_CSV\\ExperimentsMetaData.csv'
-    exp_name = ['20180905_U937_TSZ_xy1.csv', '20180905_U937_TSZ_xy2.csv', '20180905_U937_TSZ_xy3.csv', '20180905_U937_TSZ_xy5.csv', '20180905_U937_TSZ_xy9.csv'] #'20180620_HAP1_erastin_xy5.csv' # ] # ['20181227_MCF10A_SKT_xy3.csv', '20181229_HAP1-920H_FB_GCAMP_xy48.csv', '20181229_HAP1-920H_FB+PEG3350_GCAMP_xy58.csv',
-    calc_factor_of_propagation_by_number_of_dead_neighbors_and_time_from_recent_neighbors_death(
-        exp_name=exp_name,
+    # pre 2023 experiments:
+    # all_data_dir = os.path.join(os.sep, 'Users', 'yishaiazabary', 'PycharmProjects', 'University', 'CellDeathQuantification' , 'Data')
+    # experiments_main_dir_path = os.path.join(all_data_dir, 'Experiments_XYT_CSV', 'OriginalTimeMinutesData')
+    # meta_data_file_path = os.path.join(all_data_dir, 'Experiments_XYT_CSV', 'ExperimentsMetaData.csv')
+    # exp_names = list(filter(lambda x: x.endswith('.csv'), os.listdir(experiments_main_dir_path)))
+    # # exp_names = ['20180905_U937_TSZ_xy1.csv', '20180905_U937_TSZ_xy2.csv', '20180905_U937_TSZ_xy3.csv', '20180905_U937_TSZ_xy5.csv', '20180905_U937_TSZ_xy9.csv'] #'20180620_HAP1_erastin_xy5.csv' # ] # ['20181227_MCF10A_SKT_xy3.csv', '20181229_HAP1-920H_FB_GCAMP_xy48.csv', '20181229_HAP1-920H_FB+PEG3350_GCAMP_xy58.csv',
+    # calc_factor_of_propagation_by_number_of_dead_neighbors_and_time_from_recent_neighbors_death(
+    #     exp_name=exp_names,
+    #     exps_dir_path=experiments_main_dir_path,
+    #     max_number_of_dead_neighbors_to_calc=5,
+    #     max_delta_tod_from_recently_dead_neighbor=5,
+    #     meta_data_full_file_path=meta_data_file_path,
+    #     save_fig=True,
+    #     show_fig=False,
+    #     number_of_random_permutations=1000,
+    #     include_only_treatments=['erastin', 'fac&bso'],
+    #     fig_v_min=2.,
+    #     fig_v_max=8.
+    # )
+#     new 2023 experiments:
+
+    all_data_dir = os.path.join(os.sep, 'Users', 'yishaiazabary', 'PycharmProjects', 'University',
+                                'CellDeathQuantification', 'Data',
+                                "Experiments_XYT_CSV")
+                                # '2023 data')
+    experiments_main_dir_path = os.path.join(all_data_dir, 'OriginalTimeFramesData')
+    meta_data_file_path = os.path.join(all_data_dir, 'ExperimentsMetaData.csv')
+    exp_names = list(filter(lambda x: x.endswith('.csv'), os.listdir(experiments_main_dir_path)))
+    # exp_names = ['20230314_ML_Sytox1_no_reapearing_death_events.csv']
+
+    res = calc_factor_of_propagation_by_number_of_dead_neighbors_and_time_from_recent_neighbors_death(
+        exp_name=exp_names,
         exps_dir_path=experiments_main_dir_path,
         max_number_of_dead_neighbors_to_calc=5,
         max_delta_tod_from_recently_dead_neighbor=5,
-        meta_data_full_file_path=meta_data_file_path
+        meta_data_full_file_path=meta_data_file_path,
+        save_fig=True,
+        show_fig=False,
+        number_of_random_permutations=1000,
+        include_only_treatments=['ml162'],
+        fig_v_min=1.,
+        fig_v_max=3.
     )
+    all_global_rates_of_death = {name: single_res["global_rate_of_death_per_timeframe"] for name, single_res in res.items()}
+    exp_counter = 1
+    for exp_name, exp_res in all_global_rates_of_death.items():
+        if exp_counter >= 3:
+            break
+        fig, ax = plt.subplots()
+        values = list(exp_res.values())
+        x_axis = np.arange(0, len(values))
+        ax.plot(x_axis, values)
+        ax.set_title(exp_name)
+        plt.show()
+        exp_counter+=1
+
