@@ -197,7 +197,7 @@ def calc_all_experiments_SPI_and_NI_for_landscape(
             results[exp] = res
         return results
     try:
-        print(exp_name)
+        # print(exp_name)
         exp_full_path = os.path.join(exps_dir_path, exp_name)
         
         exp_treatment, exp_temporal_resolution = get_exp_treatment_type_and_temporal_resolution(exp_file_name=exp_name,
