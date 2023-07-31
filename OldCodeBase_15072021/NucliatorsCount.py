@@ -19,6 +19,28 @@ class NucleatorsCounter:
         cell2_x, cell2_y = cell2_xy
         return ((cell1_x - cell2_x)**2 + (cell1_y - cell2_y)**2)**.5
 
+    def get_cells_delta_tod(self, cell1_idx, cell2_idx):
+        cell1_tod, cell2_tod = self.TIMES[cell1_idx], self.TIMES[cell2_idx]
+        return abs(cell1_tod-cell2_tod)
+    
+    def get_all_nighbors_tods(self):
+        single_neighbors_pairs_delta_tod=[]
+        for cell_idx in np.arange(0, len(self.TIMES),1):
+            cell_neighbors = self.neighbors_list[cell_idx]
+            for cell_neighbor_idx in cell_neighbors:
+                single_neighbors_pair_delta_tod = self.get_cells_delta_tod(cell_idx, cell_neighbor_idx)
+                single_neighbors_pairs_delta_tod.append(single_neighbors_pair_delta_tod)
+        return single_neighbors_pairs_delta_tod, np.mean(single_neighbors_pairs_delta_tod)
+    
+    def get_all_nighbors_distances(self):
+        single_neighbors_pairs_delta_distance=[]
+        for cell_idx in np.arange(0, len(self.XY),1):
+            cell_neighbors = self.neighbors_list[cell_idx]
+            for cell_neighbor_idx in cell_neighbors:
+                single_neighbors_pair_delta_distance = self.get_real_distance(self.XY[cell_idx], self.XY[cell_neighbor_idx])
+                single_neighbors_pairs_delta_distance.append(single_neighbors_pair_delta_distance)
+        return single_neighbors_pairs_delta_distance, np.mean(single_neighbors_pairs_delta_distance)
+    
     def calc_nucleators(self, curr_TOD=0, max_TOD=None):
 
         # def nucleator_in_single_time_frame(self_ob: NucleatorsCounter, start, end, curr_propagated):
@@ -149,6 +171,18 @@ class NucleatorsCounter:
             for j in neighbors_list2[i]:
                 neighbors_list3[i] = list(set(neighbors_list3[i]+neighbors_list2[j]))
         return neighbors_list, neighbors_list2, neighbors_list3
+    
+    @staticmethod
+    def get_cells_density(XY, radius):
+        # def radius_filter(cordination_current_cell, cordination_other,radius):
+        #     return cordination_other if NucleatorsCounter.get_real_distance(cordination_current_cell,cordination_other)<radius else None
+        radius_filter = lambda cordination_other: cordination_other if NucleatorsCounter.get_real_distance((X,Y),cordination_other)<radius else None
+        all_cells_local_density_measurment_normalized_to_total_cells_num = []
+        total_cells_in_experiment = len(XY)
+        for X,Y in XY:
+            all_cells_in_the_radious_for_specific_cell = list(filter(lambda cordination_other: True if NucleatorsCounter.get_real_distance((X,Y),cordination_other)<radius else False,XY))
+            all_cells_local_density_measurment_normalized_to_total_cells_num.append(len(all_cells_in_the_radious_for_specific_cell)/total_cells_in_experiment)#len(all_cells_in_the_radious_for_specific_cell)/total_cells_in_experiment
+        return all_cells_local_density_measurment_normalized_to_total_cells_num
 
 
 
