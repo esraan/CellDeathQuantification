@@ -5,7 +5,7 @@ import os
 import math
 import pandas as pd
 import matplotlib as mpl
-from NucliatorsCount import NucleatorsCounter
+from OldCodeBase_15072021.NucliatorsCount import NucleatorsCounter
 # import TimeResolutionInspection
 
 

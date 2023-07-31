@@ -170,3 +170,52 @@ def calc_exp_all_cells_local_densities_for_distribution(
     return exp_all_cells_local_density_values
 
 
+def calc_experiment_SPI_and_NI(cells_location: list,
+                                                    cells_tods:list,
+                                                    exp_temporal_resolution:int,
+                                                    dist_threshold_nucleators_detection :int,
+                                                    exp_treatment,
+                                                    n_scramble:int,
+                                                    **kwargs) -> int :
+    nuc_p_spi_instance = NucleationProbabilityAndSPI(XY=cells_location, die_times=cells_tods, time_frame=exp_temporal_resolution, treatment= exp_treatment, n_scramble=n_scramble, dist_threshold_nucliators_detection=dist_threshold_nucleators_detection,draw=False)
+
+    return nuc_p_spi_instance.get_spi_nucleators()
+
+def calc_all_experiments_SPI_and_NI_for_landscape(
+        exp_name: Union[str, List[str]],
+        exps_dir_path: str,
+        meta_data_full_file_path: str,
+        **kwargs) -> np.array:
+    if isinstance(exp_name, list):
+        results = {}
+        for exp in exp_name:
+            res = calc_all_experiments_SPI_and_NI_for_landscape(
+                exp_name=exp,
+                exps_dir_path=exps_dir_path,
+                meta_data_full_file_path=meta_data_full_file_path, **kwargs
+            )
+            results[exp] = res
+        return results
+    try:
+        print(exp_name)
+        exp_full_path = os.path.join(exps_dir_path, exp_name)
+        
+        exp_treatment, exp_temporal_resolution = get_exp_treatment_type_and_temporal_resolution(exp_file_name=exp_name,
+                                                                                                meta_data_file_full_path=meta_data_full_file_path)
+
+        cells_locis, cells_tods = read_experiment_cell_xy_and_death_times(exp_full_path=exp_full_path)
+
+
+        SPI_and_NI_dict =\
+            calc_experiment_SPI_and_NI(cells_tods=cells_tods,
+                                                                                            cells_location=cells_locis,
+                                                                                            n_scramble=1000,
+                                                                                            exp_temporal_resolution=exp_temporal_resolution,
+                                                                                            exp_treatment=exp_treatment,
+                                                                                            dist_threshold_nucleators_detection=200)
+        # generate 'number_of_random_permutations' random permutations of cells times of death
+        #   and calculate each permutation probability map, then calculate the difference factor
+        #   between each on and the original.
+        return SPI_and_NI_dict["spi"][0], SPI_and_NI_dict["p_nuc"]
+    except FileNotFoundError:
+        return (None,None)

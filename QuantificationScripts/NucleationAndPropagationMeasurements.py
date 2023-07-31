@@ -10,7 +10,7 @@ from enum import IntEnum, unique
 from utils import *
 from global_parameters import *
 from Visualization import *
-sys.path.append("/Users/yishaiazabary/PycharmProjects/University/CellDeathQuantification/QuantificationScripts")
+sys.path.append("/Users/esraan/Library/CloudStorage/GoogleDrive-esraan@post.bgu.ac.il/My Drive/PhD materials/UpdatedCellDeathQuantification/CellDeathQuantification/QuantificationScripts")
 from SPICalculator import SPICalculator as spiCalc
 
 
