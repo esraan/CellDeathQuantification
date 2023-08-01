@@ -5,7 +5,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib import cm
 
-from NucleatorsProbabilities import *
+from QuantificationScripts.NucleatorsProbabilities import *
 from utils import *
 from global_parameters import *
 from Visualization import *
@@ -75,8 +75,8 @@ def calc_pnuc_at_varying_distances_of_neighbors_single_exp(exp_filename,
     exp_treatment_type = exp_details_df[exp_details_df['File Name'] == exp_filename]['Treatment'].values[0]
     jump_interval = exp_temporal_resolution
     # time_window_size = WINDOW_SIZE * jump_interval
-    cmap = mpl.cm.__builtin_cmaps[13]
-
+    # cmap = mpl.cm.__builtin_cmaps[13]
+    cmap = mpl.cm.get_cmap()
     # get neighbors list of all cells (topological by Voronoi)
     neighbors_list, neighbors_list2, neighbors_list3 = get_cells_neighbors(XY=XY,
                                                                            threshold_dist=DIST_THRESHOLD_IN_PIXELS)
@@ -154,7 +154,7 @@ def calc_pnuc_at_varying_distances_of_neighbors_multiple_exps(main_exp_dir_full_
     all_files_to_analyze_full_paths, all_files_to_analyze_only_exp_names = \
         get_all_paths_csv_files_in_dir(dir_path=main_exp_dir_full_path)
 
-    meta_data_file_path = os.sep.join(main_exp_dir_full_path.split(os.sep)[:-1] + ['ExperimentsMetaData.csv'])
+    meta_data_file_path = os.sep.join(main_exp_dir_full_path.split(os.sep)[:-2] + ['ExperimentsMetaData.csv'])
 
     all_exps_mean_p_nuc_lvl1, all_exps_mean_p_nuc_lvl2, all_exps_mean_p_nuc_lvl3, all_exps_results_by_treatments = \
         list(), list(), list(), dict()

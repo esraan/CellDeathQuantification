@@ -107,19 +107,19 @@ def replace_ugly_long_name(name, cell_line = ""):
             return "MCF10A+FB"
         return cell_line+"+FB"
     elif "tsz" in name.lower():
-        return "U937+TFNa+SMAC+zVAD"
+        return "U937+TSZ"#"U937+TFNa+SMAC+zVAD"
     elif "ml162" in name.lower():
         if cell_line=="":
             return "ML162"
         elif "HAP1" in cell_line:
-            return "ML162+HAP1" 
+            return "HAP1+ML162" 
         return cell_line +"+ML162"
     elif "erastin" in name.lower():
         return "HAP1+erastin"
     elif "peg" in name.lower():
         return "HAP1+FAC&BSO+PEG"
     elif "skt" in name.lower():
-        return "MCF10A+superkiller TRAIL"
+        return "MCF10A+TRAIL" #"MCF10A+superkiller TRAIL"
     elif "amsh" in name.lower():
         return "B16F10+C' dots"
     elif "h2o2" in name.lower():

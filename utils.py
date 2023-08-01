@@ -48,7 +48,7 @@ def get_all_possible_mpl_markers():
     # todo: add documentation
     possible_markers = Line2D.markers.copy()
     possible_markers.pop('None')
-    possible_markers.pop(None)
+    # possible_markers.pop(None) #Esraa-changed
     possible_markers.pop(' ')
     possible_markers.pop('')
     possible_markers.pop(',')
@@ -63,7 +63,7 @@ def get_all_unique_treatments(meta_data_file_full_path: str = None):
     """
     # todo: add documentation
     if meta_data_file_full_path is None:
-        meta_data_file_full_path = os.sep.join(os.getcwd().split(os.sep)[:-1] + ['Data',
+        meta_data_file_full_path = os.sep.join(os.getcwd().split(os.sep)[:-2] + ['OldData',
                                                                                  'Experiments_XYT_CSV',
                                                                                  'ExperimentsMetaData.csv'])
     meta_data_df = pd.read_csv(meta_data_file_full_path)

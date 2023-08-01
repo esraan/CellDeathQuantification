@@ -22,7 +22,7 @@ EPSILON = 1e-15
 
 USE_LOG = False
 
-CONFIG_FILES_DIR_PATH = os.sep.join(os.getcwd().split(os.sep)[:-1] + ['config_files'])
+CONFIG_FILES_DIR_PATH = os.sep.join(os.getcwd().split(os.sep) + ['config_files'])
 
 ALL_EXPERIMENTS_FILES_MAIN_DIR = os.sep.join(os.getcwd().split(os.sep)[:-1] + ['Data', 'Experiments_XYT_CSV'])
 
