@@ -73,14 +73,12 @@ def values_distribution_of_distances_or_delta_TODs_for_each_nighbors_pairs(
             )
             results[exp] = res
         return results
-    fig_title = kwargs.get('fig_title', f'TODs and distances dependencies\n{exp_name}\n')
-    cbar_kwargs = kwargs.get('cbar_kwargs', {})
 
-    exp_full_path = os.path.join(exps_dir_path, exp_name)
-    exp_treatment, exp_temporal_resolution = get_exp_treatment_type_and_temporal_resolution(exp_file_name=exp_name,
-                                                                                            meta_data_file_full_path=meta_data_full_file_path)
-
-    cells_locis, cells_tods = read_experiment_cell_xy_and_death_times(exp_full_path=exp_full_path)
+    try:
+        exp_full_path = os.path.join(exps_dir_path, exp_name)
+        cells_locis, cells_tods = read_experiment_cell_xy_and_death_times(exp_full_path=exp_full_path)
+    except FileNotFoundError:
+        return
 
 
     treatment_pairs_distances_and_tod_dependencies =\
@@ -125,7 +123,7 @@ def replace_ugly_long_name(name, cell_line = ""):
     elif "h2o2" in name.lower():
         return "MCF7+H2O2"
     elif "sparse" or "dense" in name.lower():
-        return cell_line+"+FAC&BSO **"
+        return "MCF10A+FAC&BSO **"
     else:
         return name
     
@@ -219,3 +217,42 @@ def calc_all_experiments_SPI_and_NI_for_landscape(
         return SPI_and_NI_dict["spi"][0], SPI_and_NI_dict["p_nuc"]
     except FileNotFoundError:
         return (None,None)
+    
+def format_melt_df_distribution_values (exp_names:list,
+                                        dict_of_exp_values_of_the_designated_variable_density_deltaTODs_distances: dict,
+                                        meta_data_full_file_path: str,
+                                        **kwargs)->dict:
+    name_of_the_melted_variable = kwargs.get("name_of_the_melted_variable", "Local_density_values")
+    Density_needed = kwargs.get("Density_needed", False)
+    dict_formated ={"Experiment_name":[],
+                    name_of_the_melted_variable:[],
+                    "Treatment":[]}
+    if Density_needed:
+        dict_formated["Density"]=[]
+        for exp_name in exp_names:
+            try:
+                disignated_len = len(dict_of_exp_values_of_the_designated_variable_density_deltaTODs_distances[exp_name]) if isinstance(dict_of_exp_values_of_the_designated_variable_density_deltaTODs_distances[exp_name], list) else 0
+                dict_formated["Experiment_name"] += [exp_name]*disignated_len
+                print(exp_name)
+                dict_formated[name_of_the_melted_variable] += dict_of_exp_values_of_the_designated_variable_density_deltaTODs_distances[exp_name]
+                exp_treatment, exp_temporal_resolution = get_exp_treatment_type_and_temporal_resolution(exp_file_name=exp_name,
+                                                                                                    meta_data_file_full_path=meta_data_full_file_path)
+                dict_formated["Treatment"]+= [exp_treatment]*disignated_len
+                dict_formated["Density"] += ["sparse" if "sparse" in exp_name else "dense"]* disignated_len
+                
+            except Exception:
+                continue
+    else:
+        for exp_name in exp_names:
+            try:
+                disignated_len = len(dict_of_exp_values_of_the_designated_variable_density_deltaTODs_distances[exp_name]) if isinstance(dict_of_exp_values_of_the_designated_variable_density_deltaTODs_distances[exp_name], list) else 0
+                dict_formated["Experiment_name"] += [exp_name]*disignated_len
+                print(exp_name)
+                dict_formated[name_of_the_melted_variable] += dict_of_exp_values_of_the_designated_variable_density_deltaTODs_distances[exp_name]
+                exp_treatment, exp_temporal_resolution = get_exp_treatment_type_and_temporal_resolution(exp_file_name=exp_name,
+                                                                                                    meta_data_file_full_path=meta_data_full_file_path)
+                dict_formated["Treatment"]+= [exp_treatment]*disignated_len
+            except Exception:
+                continue
+    
+    return dict_formated
