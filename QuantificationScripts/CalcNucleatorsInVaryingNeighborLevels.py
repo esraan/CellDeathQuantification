@@ -293,6 +293,7 @@ def calc_pnuc_at_varying_distances_of_neighbors_multiple_exps(main_exp_dir_full_
                                                         title=f'Treatments µ(P(Nuc)) at Various neighborhood levels',
                                                         marker_size=probabilities_marker_size,
                                                         exps_treatments=all_exps_treatments)
+    return all_exps_results_by_treatments
 
 
 if __name__ == '__main__':

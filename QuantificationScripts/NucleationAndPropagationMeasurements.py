@@ -2145,7 +2145,7 @@ def calc_proba_for_death_decision_at_x_dead_neighbors_and_delta_tod(neighbors_li
         # all cells that are alive at given time (time_x) + the delta to die in (delta_time_to_die_by) - t+\delta.
         alive_cells_at_time_x1 = np.where(cells_tods > time_x + delta_time_to_die_by)[0]
         # all cells that are dead up to given time (time_x)
-        dead_cells_at_time_x = np.where(cells_tods <= time_x)[0]
+        dead_cells_at_time_x = np.where(cells_tods <= time_x)[0] #this is meant just to filter out cells that does not fit the constrant of #dead cells that we set
         for cell_idx, cell_neighbors in enumerate(neighbors_list):
             # check whether cell already dead
             if cell_idx in dead_cells_at_time_x or cell_idx in examined_cells:

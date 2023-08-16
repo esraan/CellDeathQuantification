@@ -9,6 +9,9 @@ import datetime
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.collections import EllipseCollection,CircleCollection,PatchCollection
+import math
 from QuantificationScripts.NucleationAndPropagationMeasurements import *
 from OldCodeBase_15072021.NucliatorsCount import NucleatorsCounter 
 from OldCodeBase_15072021.NucleationProbabilityAndSPI import NucleationProbabilityAndSPI 
@@ -101,8 +104,10 @@ def replace_ugly_long_name(name, cell_line = ""):
     if "fb" in name.lower() and "peg" not in name.lower():
         if cell_line=="":
             return "FAC&BSO"
-        elif "sgCx43" in cell_line:
-            return "MCF10A+FB"
+        # elif "sgCx43" in cell_line:
+        #     return "MCF10A+FB"
+        if "dense" or "sparse" in name:
+            return "MCF10A+FAC&BSO **"
         return cell_line+"+FB"
     elif "tsz" in name.lower():
         return "U937+TSZ"#"U937+TFNa+SMAC+zVAD"
@@ -247,7 +252,7 @@ def format_melt_df_distribution_values (exp_names:list,
             try:
                 disignated_len = len(dict_of_exp_values_of_the_designated_variable_density_deltaTODs_distances[exp_name]) if isinstance(dict_of_exp_values_of_the_designated_variable_density_deltaTODs_distances[exp_name], list) else 0
                 dict_formated["Experiment_name"] += [exp_name]*disignated_len
-                print(exp_name)
+                # print(exp_name)
                 dict_formated[name_of_the_melted_variable] += dict_of_exp_values_of_the_designated_variable_density_deltaTODs_distances[exp_name]
                 exp_treatment, exp_temporal_resolution = get_exp_treatment_type_and_temporal_resolution(exp_file_name=exp_name,
                                                                                                     meta_data_file_full_path=meta_data_full_file_path)
@@ -256,3 +261,78 @@ def format_melt_df_distribution_values (exp_names:list,
                 continue
     
     return dict_formated
+
+def draw_cells_via_fixed_radious_according_to_xy_cordination_of_prevoius_data_single_exp(cells_location: list,
+                                                                                         cells_tod:List,
+                                                                                         cells_fixed_radious: int,
+                                                                                         **kwargs):
+    
+    # X = [double[0] for double in cells_location]
+    # Y = [double[1] for double in cells_location]
+    # radious = 2
+    # size = [math.pi * (radious**2)]*len(X)
+    # patches = [plt.Circle(center, size) for center, size in zip(cells_locis, size)]
+    # fig, ax = plt.subplots()
+    # coll = PatchCollection(patches)
+    # ax.add_collection(coll)
+    size = math.pi * (cells_fixed_radious**2)
+    color = np.random.rand(len(cells_location))
+    cmap = plt.cm.twilight_shifted
+    fig, ax = plt.subplots()
+    facecolors = [cm.jet(x) for x in cells_tod]
+    # offsets = list(zip(X, Y))
+    ec = EllipseCollection(widths=size, heights=size, angles=0, units='xy',
+                                        facecolors=plt.cm.twilight_shifted(cells_tod), 
+                                        offsets=cells_location, transOffset=ax.transData)
+    ax.add_collection(ec)
+    ax.axis('equal') # set aspect ratio to equal
+    # ax.axis([-400, 1800, -200, 1600])
+    # fig=plt.scatter(X, Y, c=color, cmap=cmap)
+    pos_neg_clipped = ax.imshow(cells_tod, cmap=cmap,
+                             interpolation='none')
+    cbar = plt.colorbar(pos_neg_clipped,ax=ax)
+    cbar.set_label('TOD')
+    plt.xlim(0,2900)
+    plt.ylim(0,2500)
+    plt.show()
+    
+
+def draw_cells_via_fixed_radious_according_to_xy_cordination_of_prevoius_data(
+            exp_name: Union[str, List[str]],
+            exps_dir_path: str,
+            meta_data_full_file_path: str,
+            **kwargs):
+    
+    
+    
+    if isinstance(exp_name, list):
+        for exp in exp_name:
+            draw_cells_via_fixed_radious_according_to_xy_cordination_of_prevoius_data(
+                exp_name=exp,
+                exps_dir_path=exps_dir_path,
+                meta_data_full_file_path=meta_data_full_file_path,
+                **kwargs
+            )
+        return
+        
+    try:
+        cells_fixed_radious = kwargs.get("cells_fixed_radious", 10)
+        exp_full_path = os.path.join(exps_dir_path, exp_name)
+        exp_treatment, exp_temporal_resolution = get_exp_treatment_type_and_temporal_resolution(exp_file_name=exp_name,
+                                                                                            meta_data_file_full_path=meta_data_full_file_path)
+        
+        if True not in [to_include.lower() in exp_treatment.lower() for to_include in kwargs.get("treatment_to_include",[])]:
+            return
+        cells_locis, cells_tod = read_experiment_cell_xy_and_death_times(exp_full_path=exp_full_path)
+
+
+        draw_cells_via_fixed_radious_according_to_xy_cordination_of_prevoius_data_single_exp(cells_location=cells_locis,
+                                                                                             cells_tod= cells_tod,
+                                                                                            cells_fixed_radious=cells_fixed_radious,
+                                                                                            )
+        # generate 'number_of_random_permutations' random permutations of cells times of death
+        #   and calculate each permutation probability map, then calculate the difference factor
+        #   between each on and the original.
+        
+    except FileNotFoundError:
+        return 

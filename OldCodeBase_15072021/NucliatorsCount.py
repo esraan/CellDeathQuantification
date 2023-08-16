@@ -4,6 +4,7 @@ import pandas as pd
 from scipy.spatial import Voronoi, voronoi_plot_2d
 from matplotlib import pyplot as plt
 from scipy.stats import pearsonr
+import math
 
 
 class NucleatorsCounter:
@@ -181,7 +182,7 @@ class NucleatorsCounter:
         total_cells_in_experiment = len(XY)
         for X,Y in XY:
             all_cells_in_the_radious_for_specific_cell = list(filter(lambda cordination_other: True if NucleatorsCounter.get_real_distance((X,Y),cordination_other)<radius else False,XY))
-            all_cells_local_density_measurment_normalized_to_total_cells_num.append(len(all_cells_in_the_radious_for_specific_cell)/total_cells_in_experiment)#len(all_cells_in_the_radious_for_specific_cell)/total_cells_in_experiment
+            all_cells_local_density_measurment_normalized_to_total_cells_num.append(len(all_cells_in_the_radious_for_specific_cell)/(math.pi * radius**2))#len(all_cells_in_the_radious_for_specific_cell)/total_cells_in_experiment
         return all_cells_local_density_measurment_normalized_to_total_cells_num
 
 
