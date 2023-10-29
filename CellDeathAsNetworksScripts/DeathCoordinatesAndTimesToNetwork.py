@@ -11,7 +11,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import networkx as nx
 import graph_tool.all as gt
-from utils import get_cells_neighbors
+sys.path.append("/Users/esraan/Library/CloudStorage/GoogleDrive-esraan@post.bgu.ac.il/My Drive/PhD materials/UpdatedCellDeathQuantification/CellDeathQuantification")
+from utils import *
 from OldCodeBase_15072021.NucliatorsCount import NucleatorsCounter
 
 def convert_cell_deaths_to_graph_tool_networks(
@@ -24,7 +25,7 @@ def convert_cell_deaths_to_graph_tool_networks(
     vertices_indices = np.arange(0, times_of_death.size, 1)
     initial_graph = gt.Graph()  # the graph representing only cell locations prior to any death
     initial_graph.add_vertex(len(vertices_indices))   # add all vertices
-    cells_coordinates_prop_map = initial_graph.new_vertex_property("vector<double>", vals=cells_coordinates)
+    cells_coordinates_prop_map = initial_graph.new_vp("vector<double>", vals=cells_coordinates) #new_vp alias new_vertex_property
     initial_graph.vp[kwargs.get("cell_position_property_name", "coordinates")] = cells_coordinates_prop_map
     by_frame_networks = [initial_graph]
     neighbors_list_lvl1, neighbors_list_lvl2, neighbors_list_lvl3 = get_cells_neighbors(XY=cells_coordinates,
@@ -34,7 +35,7 @@ def convert_cell_deaths_to_graph_tool_networks(
                                dist_threshold_nucleators_detection=100)
     exp_nucleators = exp_nc.calc_nucleators()
     vertices_colors_by_nucleators = ["red" if cell_is_nuc else "blue" for cell_is_nuc in exp_nucleators]
-    cells_colors_prop_map = initial_graph.new_vertex_property("string", vals=vertices_colors_by_nucleators)
+    cells_colors_prop_map = initial_graph.new_vp("string", vals=vertices_colors_by_nucleators) #new_vp alias new_vertex_property
     initial_graph.vp[kwargs.get('vertices_is_nuc_property', 'vertex_is_nuc_color')] = cells_colors_prop_map
 
     prev_graph = initial_graph.copy()
@@ -87,8 +88,8 @@ if __name__ == '__main__':
     # test_exp_dir_path = "/Users/yishaiazabary/PycharmProjects/University/CellDeathQuantification/Data/Experiments_XYT_CSV/OriginalTimeFramesData"
     # test_exp_fname = "20180620_HAP1_erastin_xy1.csv"
     # test_exp_path = os.path.join(test_exp_dir_path, test_exp_fname)
-    test_exp_fname = "20230314_ML_Sytox1_RawTrackmateOutputSpotsCoordinates.csv"
-    test_exp_path = "/Users/yishaiazabary/Downloads/ML_Sytox1_TIFF_Stack/20230314_ML_Sytox1_RawTrackmateOutputSpotsCoordinates.csv"
+    test_exp_fname = "2023_05_17_2023_05_10_red nuclei_7min_interval_sparse2_colony_death_times_no_reapearing_death_events"
+    test_exp_path = "/Users/esraan/Library/CloudStorage/GoogleDrive-esraan@post.bgu.ac.il/My Drive/PhD materials/2023DataSet/CSVs_trackmate_fiji/2023_05_17_2023_05_10_red nuclei_7min_interval_sparse2_colony_death_times_no_reapearing_death_events.csv"
     test_exp_df = pd.read_csv(test_exp_path)
     list_of_networks_by_frames = convert_cell_deaths_to_graph_tool_networks(coordinates_and_times=test_exp_df,
                                                                             times_col_name="death_time",

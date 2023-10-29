@@ -182,8 +182,72 @@ class NucleatorsCounter:
         total_cells_in_experiment = len(XY)
         for X,Y in XY:
             all_cells_in_the_radious_for_specific_cell = list(filter(lambda cordination_other: True if NucleatorsCounter.get_real_distance((X,Y),cordination_other)<radius else False,XY))
-            all_cells_local_density_measurment_normalized_to_total_cells_num.append(len(all_cells_in_the_radious_for_specific_cell)/(math.pi * radius**2))#len(all_cells_in_the_radious_for_specific_cell)/total_cells_in_experiment
+            all_cells_local_density_measurment_normalized_to_total_cells_num.append(len(all_cells_in_the_radious_for_specific_cell)/(math.pi * (radius/3.031)**2))#len(all_cells_in_the_radious_for_specific_cell)/total_cells_in_experiment
         return all_cells_local_density_measurment_normalized_to_total_cells_num
+    
+    
+
+def calculate_area_in_first_quarter(center_x, center_y, radius):
+    # Calculate the coordinates of the intersection points
+    intersection_x1 = center_x + radius
+    intersection_x2 = center_x
+    intersection_y1 = center_y
+    intersection_y2 = center_y + radius
+    
+    # Calculate the distance between the center and one of the intersection points
+    distance = math.sqrt((intersection_x1 - center_x)**2 + (intersection_y1 - center_y)**2)
+    
+    # Calculate the angle formed by the radius and the positive x-axis
+    angle = math.acos(distance / radius)
+    
+    # Calculate the area of the sector
+    sector_area = 0.5 * radius**2 * angle
+    
+    # Calculate the area of the triangle
+    triangle_area = 0.5 * (intersection_x1 - center_x) * (intersection_y2 - center_y)
+    
+    # Calculate the area in the first quarter
+    area_in_first_quarter = sector_area - triangle_area
+    
+    return area_in_first_quarter
+
+
+
+
+def calculate_area_in_first_quarter_2(center_x, center_y, radius):
+    # Calculate the coordinates of the intersection points
+    # The circle intersects the x-axis when y = center_y
+    intersection_x1 = center_x + math.sqrt(radius**2 - (center_y - center_y)**2)
+    intersection_x2 = center_x
+    # The circle intersects the y-axis when x = center_x
+    intersection_y1 = center_y + math.sqrt(radius**2 - (center_x - center_x)**2)
+    intersection_y2 = center_y
+    
+    # Calculate the distance between the center and one of the intersection points
+    distance = math.sqrt((intersection_x1 - center_x)**2 + (intersection_y1 - center_y)**2)
+    
+    # Calculate the angle formed by the radius and the positive x-axis
+    angle = math.acos(distance / radius)
+    
+    # Calculate the area of the sector
+    sector_area = 0.5 * radius**2 * angle
+    
+    # Calculate the area of the triangle
+    triangle_area = 0.5 * (intersection_x1 - center_x) * (intersection_y1 - center_y)
+    
+    # Calculate the area in the first quarter
+    area_in_first_quarter = sector_area - triangle_area
+    
+    return area_in_first_quarter
+
+# Example usage
+center_x = 2.0
+center_y = 3.0
+radius = 4.0
+
+area = calculate_area_in_first_quarter(center_x, center_y, radius)
+print(f"Area of the circle in the first quarter: {area}")
+
 
 
 
